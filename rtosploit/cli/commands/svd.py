@@ -1,9 +1,47 @@
 """rtosploit svd — SVD file operations."""
+import os
 import click
 from rich.console import Console
 from rich.table import Table
 
 console = Console()
+
+# Vendor prefix mapping for CMSIS-SVD GitHub repository
+_VENDOR_PREFIXES = {
+    "STM32": "STMicro",
+    "STM":   "STMicro",
+    "NRF":   "Nordic",
+    "ATSAMD": "Atmel",
+    "ATSAM":  "Atmel",
+    "AT":     "Atmel",
+    "LPC":    "NXP",
+    "MK":     "Freescale",
+    "EFM32":  "SiliconLabs",
+    "EFR32":  "SiliconLabs",
+    "TM4C":   "TexasInstruments",
+    "LM3S":   "TexasInstruments",
+    "LM4F":   "TexasInstruments",
+    "MSP432": "TexasInstruments",
+    "CC":     "TexasInstruments",
+    "XMC":    "Infineon",
+    "CY":     "Cypress",
+    "RP":     "RaspberryPi",
+    "GD32":   "GigaDevice",
+    "ESP32":  "Espressif",
+    "MAX":    "Maxim",
+}
+
+_SVD_BASE_URL = "https://raw.githubusercontent.com/cmsis-svd/cmsis-svd-data/main/"
+
+
+def _guess_vendor(device: str) -> str | None:
+    """Guess the vendor folder name from a device/chip prefix."""
+    upper = device.upper()
+    # Try longest prefix first for correct matching (e.g. STM32 before STM)
+    for prefix in sorted(_VENDOR_PREFIXES, key=len, reverse=True):
+        if upper.startswith(prefix):
+            return _VENDOR_PREFIXES[prefix]
+    return None
 
 
 @click.group("svd")
@@ -92,3 +130,95 @@ def svd_generate(ctx, svd_file, mode, output):
     console.print(f"[dim]Generating {mode} stubs from {svd_file} -> {output}/[/dim]")
     console.print("[yellow]Note: Full SVD generation available via 'cargo run -p rtosploit-svd'[/yellow]")
     console.print(f"[green]Done.[/green] Stubs written to: [cyan]{output}/[/cyan]")
+
+
+@svd.command("download")
+@click.option("--device", required=True, help="Target device/chip name (e.g. STM32F407, nRF52840)")
+@click.option("--output", "-o", "output_dir", type=click.Path(), default=".", show_default=True, help="Directory to save the SVD file")
+@click.pass_context
+def svd_download(ctx, device, output_dir):
+    """Download an SVD file from the CMSIS-SVD GitHub repository."""
+    import urllib.request
+    import urllib.error
+
+    output_json = ctx.obj.get("output_json", False)
+
+    vendor = _guess_vendor(device)
+    if vendor is None:
+        if output_json:
+            import json
+            click.echo(json.dumps({"error": f"Unknown vendor prefix for device: {device}", "device": device}))
+        else:
+            console.print(f"[red]Could not determine vendor for device: {device}[/red]")
+            console.print("[dim]Known prefixes: " + ", ".join(sorted(_VENDOR_PREFIXES.keys())) + "[/dim]")
+        raise SystemExit(1)
+
+    # Try common filename patterns: exact name, uppercase, with .svd extension
+    device_upper = device.upper()
+    candidates = [
+        f"{device}.svd",
+        f"{device_upper}.svd",
+        f"{device}.xml",
+        f"{device_upper}.xml",
+    ]
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    if not output_json:
+        console.print(f"[dim]Vendor detected: [cyan]{vendor}[/cyan] for device [cyan]{device}[/cyan][/dim]")
+        console.print(f"[dim]Searching CMSIS-SVD repository...[/dim]")
+
+    downloaded_path = None
+    last_error = None
+
+    for filename in candidates:
+        url = f"{_SVD_BASE_URL}{vendor}/{filename}"
+        dest = os.path.join(output_dir, filename)
+
+        try:
+            if not output_json:
+                console.print(f"[dim]  Trying: {url}[/dim]")
+            urllib.request.urlretrieve(url, dest)
+            downloaded_path = dest
+            break
+        except urllib.error.HTTPError as e:
+            last_error = e
+            # Clean up partial file if any
+            if os.path.exists(dest):
+                os.remove(dest)
+            continue
+        except urllib.error.URLError as e:
+            last_error = e
+            if os.path.exists(dest):
+                os.remove(dest)
+            continue
+
+    if downloaded_path is None:
+        if output_json:
+            import json
+            click.echo(json.dumps({
+                "error": f"Could not download SVD for {device}",
+                "vendor": vendor,
+                "tried": candidates,
+                "last_error": str(last_error),
+            }))
+        else:
+            console.print(f"\n[red]Could not download SVD file for {device}[/red]")
+            console.print(f"[dim]Vendor: {vendor}[/dim]")
+            console.print(f"[dim]Tried: {', '.join(candidates)}[/dim]")
+            console.print(f"[dim]Last error: {last_error}[/dim]")
+            console.print(f"\n[yellow]You can browse available SVDs at:[/yellow]")
+            console.print(f"  [cyan]https://github.com/cmsis-svd/cmsis-svd-data/tree/main/{vendor}[/cyan]")
+        raise SystemExit(1)
+
+    if output_json:
+        import json
+        click.echo(json.dumps({
+            "device": device,
+            "vendor": vendor,
+            "file": downloaded_path,
+            "url": url,
+        }))
+    else:
+        console.print(f"\n[green]Downloaded:[/green] [cyan]{downloaded_path}[/cyan]")
+        console.print(f"[dim]Parse with: rtosploit svd parse {downloaded_path}[/dim]")

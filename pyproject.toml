@@ -41,6 +41,7 @@ dev = [
     "mypy",
     "ruff",
     "black",
+    "maturin>=1.0",
 ]
 
 [project.scripts]
@@ -49,6 +50,16 @@ rtosploit = "rtosploit.cli.main:cli"
 [project.urls]
 Homepage = "https://github.com/rtosploit/rtosploit"
 Repository = "https://github.com/rtosploit/rtosploit"
+
+# Maturin configuration for building optional Rust/PyO3 extensions.
+# The default build backend remains Hatchling (pure-Python). Use Maturin
+# when you need to compile the Rust native module (rtosploit._native):
+#   maturin develop --release
+[tool.maturin]
+features = ["pyo3/extension-module"]
+python-source = "."
+module-name = "rtosploit._native"
+manifest-path = "Cargo.toml"
 
 [tool.ruff]
 line-length = 100

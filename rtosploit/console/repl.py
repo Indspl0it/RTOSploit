@@ -13,6 +13,42 @@ from .state import ConsoleState
 
 logger = logging.getLogger(__name__)
 
+
+def _validate_option_value(opt_type: str, value: str) -> tuple[bool, str]:
+    """Validate a value against an option type.
+
+    Returns (is_valid, error_message).
+    """
+    t = opt_type.lower() if opt_type else "str"
+
+    if t in ("int", "integer"):
+        try:
+            int(value)
+        except ValueError:
+            return False, f"Expected integer, got: {value}"
+
+    elif t in ("bool", "boolean"):
+        if value.lower() not in ("true", "false", "yes", "no", "1", "0"):
+            return False, f"Expected boolean (true/false/yes/no/1/0), got: {value}"
+
+    elif t == "float":
+        try:
+            float(value)
+        except ValueError:
+            return False, f"Expected float, got: {value}"
+
+    elif t == "port":
+        try:
+            port = int(value)
+        except ValueError:
+            return False, f"Expected port number (1-65535), got: {value}"
+        else:
+            if port < 1 or port > 65535:
+                return False, f"Port must be 1-65535, got: {port}"
+
+    # "str", "string", "path", and anything else: accept any string
+    return True, ""
+
 BANNER = r"""
   ____  _____ ___  ____        _       _ _
  |  _ \|_   _/ _ \/ ___| _ __ | | ___ (_) |_
@@ -179,6 +215,26 @@ class RTOSploitConsole:
         inst = self.state.current_module_instance
         if key not in inst.options:
             self.warning(f"Unknown option: [dim]{key}[/dim]")
+            self.state.option_values[key] = value
+            self.success(f"{key} => [cyan]{value}[/cyan]")
+            return
+
+        opt = inst.options[key]
+
+        # Type validation
+        valid, err = _validate_option_value(opt.type, value)
+        if not valid:
+            self.failure(f"Invalid value for [cyan]{key}[/cyan]: {err}")
+            return
+
+        # Choices validation (if the option defines choices)
+        choices = getattr(opt, "choices", None)
+        if choices and value not in choices:
+            self.failure(
+                f"Invalid value for [cyan]{key}[/cyan]: "
+                f"must be one of {', '.join(choices)}"
+            )
+            return
 
         self.state.option_values[key] = value
         self.success(f"{key} => [cyan]{value}[/cyan]")
@@ -404,7 +460,7 @@ class RTOSploitConsole:
             from prompt_toolkit import PromptSession
             from prompt_toolkit.history import FileHistory
             from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
-            from prompt_toolkit.completion import WordCompleter
+            from prompt_toolkit.completion import Completer, Completion
 
             all_commands = [
                 "use", "show", "set", "unset", "check", "exploit", "run",
@@ -414,7 +470,54 @@ class RTOSploitConsole:
             registry = self._get_registry()
             module_paths = list(registry._modules.keys())
 
-            completer = WordCompleter(all_commands + module_paths, ignore_case=True)
+            console_ref = self
+
+            class RTOSploitCompleter(Completer):
+                """Context-aware completer for the RTOSploit console."""
+
+                def get_completions(self, document, complete_event):
+                    text = document.text_before_cursor
+                    text_lower = text.lower()
+
+                    # "use <partial>" -> complete module paths
+                    if text_lower.startswith("use "):
+                        partial = text[4:]
+                        for path in module_paths:
+                            if path.startswith(partial) or path.lower().startswith(partial.lower()):
+                                yield Completion(path, start_position=-len(partial))
+
+                    # "set <partial_option>" -> complete option names
+                    elif text_lower.startswith("set "):
+                        after_set = text[4:]
+                        # Only complete option name (no space yet = still typing option name)
+                        if " " not in after_set:
+                            inst = console_ref.state.current_module_instance
+                            if inst is not None and hasattr(inst, "options"):
+                                for name in inst.options:
+                                    if name.lower().startswith(after_set.lower()):
+                                        yield Completion(name, start_position=-len(after_set))
+
+                    # "show <partial>" -> complete show sub-commands
+                    elif text_lower.startswith("show "):
+                        partial = text[5:]
+                        for sub in ("options", "info", "modules", "exploits"):
+                            if sub.startswith(partial.lower()):
+                                yield Completion(sub, start_position=-len(partial))
+
+                    # "unset <partial>" -> complete from set option names
+                    elif text_lower.startswith("unset "):
+                        partial = text[6:]
+                        for name in console_ref.state.option_values:
+                            if name.lower().startswith(partial.lower()):
+                                yield Completion(name, start_position=-len(partial))
+
+                    # Default: complete command names
+                    else:
+                        for cmd in all_commands:
+                            if cmd.startswith(text_lower):
+                                yield Completion(cmd, start_position=-len(text))
+
+            completer = RTOSploitCompleter()
 
             session = PromptSession(
                 history=FileHistory(str(self._history_file)),

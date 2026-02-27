@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import sys
+import traceback
+
 import click
 from rich.console import Console
+from rich.panel import Panel
 
 from .. import __version__
 
@@ -66,3 +69,38 @@ cli.add_command(analyze)
 cli.add_command(svd)
 cli.add_command(vulnrange)
 cli.add_command(console_cmd)
+
+
+def main() -> None:
+    """Entry point wrapper with global exception handling."""
+    try:
+        cli(standalone_mode=False)
+    except KeyboardInterrupt:
+        err_console.print("\n[yellow]Interrupted[/yellow]")
+        sys.exit(130)
+    except click.Abort:
+        err_console.print("\n[yellow]Aborted[/yellow]")
+        sys.exit(1)
+    except click.exceptions.Exit as exc:
+        sys.exit(exc.exit_code)
+    except click.ClickException as exc:
+        exc.show()
+        sys.exit(exc.exit_code)
+    except Exception as exc:
+        # Determine if --verbose was passed (check sys.argv before Click parses)
+        verbose = "--verbose" in sys.argv or "-v" in sys.argv
+
+        error_body = f"[bold red]{type(exc).__name__}[/bold red]: {exc}"
+        if verbose:
+            tb = traceback.format_exception(type(exc), exc, exc.__traceback__)
+            error_body += "\n\n[dim]" + "".join(tb).rstrip() + "[/dim]"
+
+        err_console.print(
+            Panel(
+                error_body,
+                title="[bold red]Error[/bold red]",
+                border_style="red",
+                expand=False,
+            )
+        )
+        sys.exit(1)

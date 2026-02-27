@@ -53,12 +53,11 @@ mod tests {
     #[test]
     fn filter_removes_bad_addr() {
         let gadgets = vec![
-            make_gadget(0x0800_0100), // contains 0x00 bytes
-            make_gadget(0x0801_0204), // also contains 0x00 ... let's use clean ones
+            make_gadget(0x0800_0100), // LE: [0x00, 0x01, 0x00, 0x08] — contains 0x00
+            make_gadget(0x0800_0300), // LE: [0x00, 0x03, 0x00, 0x08] — contains 0x00
         ];
-        // 0x00 is common bad char; addr 0x0800_0100 contains it
+        // 0x00 is common bad char; both addresses contain it
         let filtered = filter_gadgets(&gadgets, &[0x00]);
-        // All addresses here contain 0x00, so all get filtered
         assert!(filtered.is_empty());
     }
 

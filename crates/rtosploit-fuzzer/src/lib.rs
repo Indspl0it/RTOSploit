@@ -20,3 +20,5 @@ pub use crash::{
     find_function_prologues, HeapShadowTracker,
 };
 pub use corpus::{Corpus, CorpusEntry};
+pub use harness::{FuzzHarness, HarnessConfig, HarnessExecutionResult, ExitCode, CrashInfo, QemuHarness, InProcessHarness};
+pub use report::{FuzzReport, CrashSeverity, ReportCrashType};

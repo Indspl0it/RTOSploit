@@ -188,3 +188,106 @@ def vulnrange_writeup(ctx, range_id):
         content = f.read()
 
     console.print(Markdown(content))
+
+
+# Known QEMU machine names for ARM Cortex-M / embedded targets
+_KNOWN_QEMU_MACHINES = {
+    "mps2-an385",
+    "mps2-an386",
+    "mps2-an500",
+    "mps2-an505",
+    "mps2-an511",
+    "lm3s6965evb",
+    "lm3s811evb",
+    "musca-a",
+    "musca-b1",
+    "netduino2",
+    "netduinoplus2",
+    "stm32vldiscovery",
+    "microbit",
+    "nrf51",
+    "raspi2b",
+    "vexpress-a9",
+    "vexpress-a15",
+    "virt",
+}
+
+
+@vulnrange.command("verify")
+@click.argument("range_id")
+@click.pass_context
+def vulnrange_verify(ctx, range_id):
+    """Verify that all assets for a VulnRange challenge are present and valid."""
+    from rtosploit.vulnrange.manager import VulnRangeManager
+    mgr = VulnRangeManager(VULNRANGE_DIR)
+
+    try:
+        manifest = mgr.get(range_id)
+    except FileNotFoundError:
+        console.print(f"[red]Range not found: {range_id}[/red]")
+        raise SystemExit(1)
+
+    range_dir = mgr.vulnrange_dir / manifest.id
+
+    checks = []
+
+    # 1. Firmware binary exists and is non-empty
+    firmware_path = range_dir / manifest.target.firmware
+    fw_exists = firmware_path.exists() and firmware_path.stat().st_size > 0
+    fw_detail = ""
+    if firmware_path.exists():
+        fw_detail = f"{firmware_path.stat().st_size} bytes" if fw_exists else "empty file"
+    else:
+        fw_detail = "file missing"
+    checks.append(("Firmware binary", fw_exists, str(firmware_path), fw_detail))
+
+    # 2. QEMU machine name is recognized
+    machine = manifest.target.machine
+    machine_ok = machine in _KNOWN_QEMU_MACHINES
+    machine_detail = "recognized" if machine_ok else "not in known machine list"
+    checks.append(("QEMU machine", machine_ok, machine, machine_detail))
+
+    # 3. Exploit script exists
+    exploit_path = range_dir / manifest.exploit.script
+    exploit_ok = exploit_path.exists()
+    exploit_detail = "found" if exploit_ok else "file missing"
+    checks.append(("Exploit script", exploit_ok, str(exploit_path), exploit_detail))
+
+    # 4. Writeup exists
+    writeup_path = range_dir / "writeup.md"
+    writeup_ok = writeup_path.exists()
+    writeup_detail = "found" if writeup_ok else "file missing"
+    checks.append(("Writeup", writeup_ok, str(writeup_path), writeup_detail))
+
+    output_json = ctx.obj.get("output_json", False)
+    if output_json:
+        import json
+        result = {
+            "range_id": range_id,
+            "checks": [
+                {"name": name, "passed": passed, "path": path, "detail": detail}
+                for name, passed, path, detail in checks
+            ],
+            "all_passed": all(passed for _, passed, _, _ in checks),
+        }
+        click.echo(json.dumps(result, indent=2))
+        return
+
+    table = Table(title=f"VulnRange Verify: {range_id}", show_header=True, header_style="bold cyan")
+    table.add_column("Check", style="white")
+    table.add_column("Status", style="white", no_wrap=True)
+    table.add_column("Path / Value", style="dim")
+    table.add_column("Detail", style="dim")
+
+    for name, passed, path, detail in checks:
+        status = "[green]\u2713 PASS[/green]" if passed else "[red]\u2717 FAIL[/red]"
+        table.add_row(name, status, path, detail)
+
+    console.print(table)
+
+    passed_count = sum(1 for _, p, _, _ in checks if p)
+    total = len(checks)
+    if passed_count == total:
+        console.print(f"\n[green]All {total} checks passed.[/green]")
+    else:
+        console.print(f"\n[yellow]{passed_count}/{total} checks passed.[/yellow]")
