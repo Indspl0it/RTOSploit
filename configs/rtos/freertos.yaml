@@ -1,0 +1,37 @@
+rtos:
+  name: freertos
+  versions_supported:
+    - "10.0.0"
+    - "10.4.1"
+    - "10.5.0"
+    - "10.6.0"
+    - "11.0.0"
+
+fingerprint:
+  string_patterns:
+    - "FreeRTOS"
+    - "vTaskStartScheduler"
+    - "pvPortMalloc"
+    - "xQueueCreate"
+    - "FreeRTOS Kernel V"
+  binary_patterns:
+    - description: "heap_4 BlockLink_t manipulation"
+      pattern: "pxNextFreeBlock"
+
+heap:
+  allocators:
+    - heap_1
+    - heap_2
+    - heap_3
+    - heap_4
+    - heap_5
+  default: heap_4
+
+task_control:
+  tcb_ptoptofstack_offset: 0
+  tcb_task_name_offset: 52
+
+scheduler:
+  entry_function: "vTaskStartScheduler"
+  pendsv_exception: 14
+  systick_exception: 15

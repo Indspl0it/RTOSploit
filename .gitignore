@@ -1,0 +1,45 @@
+# Rust
+target/
+*.pdb
+Cargo.lock
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# QEMU build artifacts
+*.o
+*.a
+*.so
+qemu-build/
+
+# RTOSploit output
+output/
+crashes/
+timeouts/
+corpus/queue/
+corpus/.state/
+*.qcow2
+
+# IDE / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/settings.json
+*.swp
+*~
+
+# Logs
+*.log

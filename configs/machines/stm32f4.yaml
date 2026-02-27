@@ -1,0 +1,65 @@
+machine:
+  name: stm32f4
+  qemu_machine: stm32vldiscovery
+  cpu: cortex-m4
+  architecture: armv7m
+
+memory:
+  flash:
+    base: 0x08000000
+    size: 0x00100000
+    permissions: rx
+  sram:
+    base: 0x20000000
+    size: 0x00020000
+    permissions: rwx
+  ccm_sram:
+    base: 0x10000000
+    size: 0x00010000
+    permissions: rw
+  peripherals:
+    base: 0x40000000
+    size: 0x20000000
+    permissions: rw
+  system:
+    base: 0xE0000000
+    size: 0x00100000
+    permissions: rw
+
+peripherals:
+  rcc:
+    base: 0x40023800
+    size: 0x400
+    irq: null
+  flash_if:
+    base: 0x40023C00
+    size: 0x400
+    irq: null
+  gpio_a:
+    base: 0x40020000
+    size: 0x400
+    irq: null
+  gpio_b:
+    base: 0x40020400
+    size: 0x400
+    irq: null
+  usart1:
+    base: 0x40011000
+    size: 0x400
+    irq: 37
+  usart2:
+    base: 0x40004400
+    size: 0x400
+    irq: 38
+  tim1:
+    base: 0x40010000
+    size: 0x400
+    irq: 24
+  tim2:
+    base: 0x40000000
+    size: 0x400
+    irq: 28
+  systick:
+    base: 0xE000E010
+    size: 0x10
+    builtin: true

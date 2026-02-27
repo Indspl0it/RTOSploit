@@ -1,0 +1,19 @@
+[package]
+name = "rtosploit-svd"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "ARM CMSIS SVD parser and QEMU peripheral stub generator"
+
+[lib]
+name = "rtosploit_svd"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+log = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+quick-xml = "0.36"

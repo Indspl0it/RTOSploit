@@ -1,0 +1,26 @@
+rtos:
+  name: threadx
+  versions_supported:
+    - "6.0.0"
+    - "6.1.0"
+    - "6.2.0"
+    - "6.3.0"
+    - "6.4.0"
+
+fingerprint:
+  string_patterns:
+    - "ThreadX"
+    - "Azure RTOS ThreadX"
+    - "tx_kernel_enter"
+    - "tx_thread_create"
+    - "_tx_initialize"
+
+heap:
+  allocators:
+    - byte_pool
+    - block_pool
+  default: byte_pool
+
+thread_control:
+  tx_thread_entry_offset: 16
+  tx_thread_name_offset: 8

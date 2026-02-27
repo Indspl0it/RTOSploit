@@ -1,0 +1,19 @@
+rtos:
+  name: zephyr
+  versions_supported:
+    - "3.0.0"
+    - "3.6.0"
+    - "4.0.0"
+    - "4.3.0"
+
+fingerprint:
+  string_patterns:
+    - "zephyr"
+    - "k_thread_create"
+    - "k_sem_init"
+    - "CONFIG_"
+  syscall_verifier_prefix: "z_vrfy_"
+
+userspace:
+  detection_symbol: "z_vrfy_"
+  config_key: "CONFIG_USERSPACE"

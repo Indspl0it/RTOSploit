@@ -1,0 +1,17 @@
+[package]
+name = "rtosploit-payloads"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Embedded payload generator — ARM Thumb2 and RISC-V"
+
+[lib]
+name = "rtosploit_payloads"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }

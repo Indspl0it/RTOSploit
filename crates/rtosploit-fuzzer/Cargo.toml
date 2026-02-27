@@ -1,0 +1,17 @@
+[package]
+name = "rtosploit-fuzzer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Coverage-guided bare-metal RTOS firmware fuzzer"
+
+[lib]
+name = "rtosploit_fuzzer"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }

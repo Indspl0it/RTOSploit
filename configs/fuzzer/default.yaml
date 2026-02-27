@@ -1,0 +1,40 @@
+fuzzer:
+  timeout_ms: 1000
+  watchdog_ms: 500
+  memory_limit_mb: 256
+  corpus_max_size: 10000
+  crash_dedup: true
+
+coverage:
+  mode: edge
+  bitmap_size: 65536
+
+crash_detection:
+  hardfault_hook: true
+  busfault_hook: true
+  memmanage_hook: true
+  usagefault_hook: true
+  watchdog: true
+  stack_canary: true
+  heap_validation: false
+  shadow_memory: false
+
+mutation:
+  max_input_size: 4096
+  dictionary: null
+  mmio_pool_size: 1024
+
+instrumentation:
+  exceptions: true
+  memory_access: false
+  basic_blocks: true
+  interrupts: true
+  syscalls: true
+  peripherals: true
+  task_switches: true
+  heap_operations: true
+  stack_tracking: true
+  trace_level: standard
+  trace_max_size_mb: 100
+  ring_buffer_events: 65536
+  sampling_rate: 1
