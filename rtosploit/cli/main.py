@@ -56,6 +56,7 @@ from rtosploit.cli.commands.payload import payload
 from rtosploit.cli.commands.analyze import analyze
 from rtosploit.cli.commands.svd import svd
 from rtosploit.cli.commands.vulnrange import vulnrange
+from rtosploit.cli.commands.console_cmd import console_cmd
 
 cli.add_command(emulate)
 cli.add_command(fuzz)
@@ -64,3 +65,4 @@ cli.add_command(payload)
 cli.add_command(analyze)
 cli.add_command(svd)
 cli.add_command(vulnrange)
+cli.add_command(console_cmd)
