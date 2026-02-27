@@ -21,6 +21,7 @@ rand_chacha = "0.3"
 
 [dev-dependencies]
 env_logger = { workspace = true }
+tempfile = "3"
 
 [features]
 default = []

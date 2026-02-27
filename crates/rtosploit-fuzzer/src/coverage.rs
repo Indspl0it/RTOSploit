@@ -51,6 +51,11 @@ impl CoverageBitmap {
         self.data.fill(0);
     }
 
+    /// Return raw bitmap bytes (for persistence / state saving).
+    pub fn as_bytes(&self) -> &[u8] {
+        self.data.as_ref()
+    }
+
     /// Raw access for testing.
     #[cfg(test)]
     pub(crate) fn raw_set(&mut self, idx: usize, val: u8) {

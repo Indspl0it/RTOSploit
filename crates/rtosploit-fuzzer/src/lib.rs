@@ -15,3 +15,8 @@ pub use coverage::{CoverageBitmap, FuzzerStats};
 pub use engine::{ExecutionResult, FuzzerEngine};
 pub use mmio::{MMIOInputSplitter, MMIOResponseProvider};
 pub use mutators::MutationScheduler;
+pub use crash::{
+    CrashType, CrashReport, CrashDetector, patch_vector_table, WatchdogState,
+    find_function_prologues, HeapShadowTracker,
+};
+pub use corpus::{Corpus, CorpusEntry};
