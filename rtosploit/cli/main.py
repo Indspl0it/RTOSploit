@@ -46,3 +46,21 @@ def cli(
         logging.basicConfig(level=logging.WARNING, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
     else:
         logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+
+
+# Register all subcommands
+from rtosploit.cli.commands.emulate import emulate
+from rtosploit.cli.commands.fuzz import fuzz
+from rtosploit.cli.commands.exploit import exploit
+from rtosploit.cli.commands.payload import payload
+from rtosploit.cli.commands.analyze import analyze
+from rtosploit.cli.commands.svd import svd
+from rtosploit.cli.commands.vulnrange import vulnrange
+
+cli.add_command(emulate)
+cli.add_command(fuzz)
+cli.add_command(exploit)
+cli.add_command(payload)
+cli.add_command(analyze)
+cli.add_command(svd)
+cli.add_command(vulnrange)
