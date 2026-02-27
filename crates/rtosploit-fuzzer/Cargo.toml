@@ -12,6 +12,16 @@ name = "rtosploit_fuzzer"
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
-log = { workspace = true }
+serde_yaml = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
+log = { workspace = true }
+rand = "0.8"
+rand_chacha = "0.3"
+
+[dev-dependencies]
+env_logger = { workspace = true }
+
+[features]
+default = []
+qemu = []  # Enable actual QEMU executor integration

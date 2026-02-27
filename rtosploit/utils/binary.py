@@ -37,6 +37,7 @@ class FirmwareImage:
     sections: list[MemorySection] = field(default_factory=list)
     symbols: dict[str, int] = field(default_factory=dict)
     path: Path = field(default_factory=lambda: Path("."))
+    architecture: str = "armv7m"  # "armv7m" | "armv8m" | "riscv32" | "unknown"
 
     def read_word(self, address: int) -> int:
         """Read a 4-byte little-endian word at the given address."""
