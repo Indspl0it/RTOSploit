@@ -9,6 +9,10 @@ description = "ARM CMSIS SVD parser and QEMU peripheral stub generator"
 [lib]
 name = "rtosploit_svd"
 
+[[bin]]
+name = "svd-gen"
+path = "src/main.rs"
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -16,4 +20,6 @@ serde_yaml = { workspace = true }
 log = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
-quick-xml = "0.36"
+quick-xml = { version = "0.36", features = ["serialize"] }
+clap = { workspace = true }
+env_logger = { workspace = true }
