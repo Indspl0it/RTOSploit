@@ -1,0 +1,52 @@
+id: KOM-ThreadX
+title: "ThreadX Kernel Object Manipulation (KOM) Attack"
+cve: null
+cvss: null
+category: kernel
+difficulty: advanced
+description: >
+  Demonstrates the Kernel Object Manipulation (KOM) attack technique against
+  Azure RTOS ThreadX. By constructing a fake TX_THREAD control block in
+  attacker-controlled memory and registering it with the kernel via the public
+  thread API, an attacker can redirect scheduler execution to arbitrary code.
+  Based on techniques from USENIX Security 2025 "KOM: Attacking RTOS Kernels
+  via Kernel Object Manipulation".
+
+target:
+  rtos: threadx
+  rtos_version: "6.3.0"
+  arch: armv7m
+  machine: mps2-an385
+  firmware: firmware.bin
+
+vulnerability:
+  type: kernel_object_manipulation
+  component: ThreadX scheduler (tx_thread_resume.c)
+  root_cause: "ThreadX trusts caller-provided TX_THREAD pointer without validating it points to a legitimate kernel object"
+  affected_function: tx_thread_resume
+  trigger: "Call tx_thread_resume() with a pointer to a crafted fake TX_THREAD struct in attacker-controlled memory"
+
+exploit:
+  technique: fake_kernel_object_injection
+  reliability: medium
+  payload: fake_tcb
+  script: exploit.py
+
+prerequisites:
+  - "QEMU mps2-an385 machine with GDB stub"
+  - "Firmware built with Azure RTOS ThreadX 6.x"
+  - "Write primitive to attacker-controlled memory region"
+  - "Knowledge of TX_THREAD struct layout for target version"
+
+tags:
+  - threadx
+  - kernel
+  - scheduler
+  - advanced
+  - research
+  - kom
+
+hints:
+  - "TX_THREAD is a C struct, not an opaque handle. Find its layout in tx_api.h or tx_port.h."
+  - "tx_thread_resume() follows tx_run_list pointers without validation. Craft a fake TX_THREAD where tx_run_list_next points to your target."
+  - "After inserting the fake thread into the run list, trigger a context switch. The scheduler will 'resume' your fake thread, loading tx_stack_ptr as the new SP."
