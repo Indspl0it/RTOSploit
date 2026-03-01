@@ -85,6 +85,15 @@ class RTOSploitConsole:
         self._history_file = Path.home() / ".config" / "rtosploit" / "history"
         self._history_file.parent.mkdir(parents=True, exist_ok=True)
 
+    @classmethod
+    def run_with_firmware(cls, firmware_path: str, machine: str | None = None) -> None:
+        """Create and run a console with firmware pre-loaded."""
+        repl = cls()
+        repl.state.option_values["firmware"] = firmware_path
+        if machine:
+            repl.state.option_values["machine"] = machine
+        repl.run()
+
     def _get_registry(self):
         if self._registry is None:
             from rtosploit.exploits.registry import ExploitRegistry

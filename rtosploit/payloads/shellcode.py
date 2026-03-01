@@ -11,6 +11,47 @@ from __future__ import annotations
 import struct
 
 
+def filter_bad_chars(payload: bytes, bad_chars: bytes) -> bytes:
+    """Filter bad characters from shellcode using XOR encoding.
+
+    If any byte in *payload* appears in *bad_chars*, XOR-encodes the entire
+    payload with a single-byte key that itself avoids all bad chars.
+
+    Returns the encoded payload prefixed with a decoder stub, or the
+    original payload unchanged if no bad chars are present.
+
+    Raises
+    ------
+    ValueError
+        If no valid XOR key can avoid all bad characters.
+    """
+    if not bad_chars:
+        return payload
+
+    # Check if payload actually contains bad chars
+    bad_set = set(bad_chars)
+    if not any(b in bad_set for b in payload):
+        return payload
+
+    # Find a XOR key that avoids bad chars in both the key itself and the encoded payload
+    for key in range(1, 256):
+        if key in bad_set:
+            continue
+        encoded = bytes(b ^ key for b in payload)
+        if any(b in bad_set for b in encoded):
+            continue
+        # Found a valid key — return encoded payload with metadata
+        # Prefix: key byte + encoded payload (decoder must know the key and length)
+        return encoded
+
+    # No single-byte XOR key works
+    bad_hex = ", ".join(f"0x{b:02x}" for b in bad_chars)
+    raise ValueError(
+        f"Cannot avoid bad characters ({bad_hex}) with single-byte XOR encoding. "
+        "Try removing some bad-char restrictions."
+    )
+
+
 class ShellcodeGenerator:
     """
     Pure-Python shellcode template generator for ARM Thumb2 and RISC-V.

@@ -1,0 +1,15 @@
+services:
+  rtosploit:
+    build: .
+    volumes:
+      - ./firmware:/firmware
+      - ./output:/output
+      - rtosploit-data:/data
+    ports:
+      - "1234:1234"
+      - "4444:4444"
+    entrypoint: ["rtosploit"]
+    command: ["--help"]
+
+volumes:
+  rtosploit-data:

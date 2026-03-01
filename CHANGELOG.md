@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.2.0] — 2026-02-27
+
+### Added
+
+- **SARIF + HTML Reporting** — `Finding` and `EngagementReport` data models with converters from crash, exploit, and CVE sources. `SARIFGenerator` produces SARIF 2.1.0 JSON for GitHub Security tab. `HTMLGenerator` produces self-contained offline-viewable HTML reports with severity badges, sortable tables, and collapsible details. New `rtosploit report generate` CLI command.
+- **Crash Triage Pipeline** — `ExploitabilityClassifier` with MSEC-style classification via ARM CFSR register analysis (IACCVIOL, MSTKERR, UNDEFINSTR, etc.). `CrashMinimizer` with binary-search input reduction. `TriagePipeline` orchestrator. New `rtosploit triage` CLI command.
+- **CVE Correlation** — `CVEDatabase` with 47 bundled FreeRTOS/ThreadX/Zephyr CVEs. `CVECorrelator` with version-range matching against firmware fingerprint. `NVDClient` for NVD 2.0 API updates. New `rtosploit cve scan|search|update` CLI commands.
+- **Coverage Visualization** — `BitmapReader` for AFL-style 64KB bitmaps. `CoverageMapper` for trace logs and bitmap-to-address mapping via Capstone disassembly. `CoverageVisualizer` with Rich terminal heatmaps and HTML output. New `rtosploit coverage view|stats` CLI commands.
+- **CI/CD Pipeline Mode** — `CIPipeline` orchestrator: fingerprint → CVE → fuzz → triage → report. `CIConfig` with severity gate (`--fail-on`). Exit codes: 0=clean, 1=findings, 2=error. New `rtosploit scan` CLI command.
+- **E2E Integration Tests** — 15 end-to-end tests that boot real firmware in QEMU, read registers via GDB RSP, inject faults, run exploits, triage crashes, and generate reports through the full v2 pipeline.
+
+### Changed
+
+- `run_exploit()` now propagates CVE ID from module metadata even when `check()` returns not_vulnerable.
+- `ExploitRegistry` now supports `get_modules_for_cve(cve_id)` to cross-reference CVEs with available exploit modules.
+
+### Test Summary
+
+- 753 Python tests passing (119 new v2 tests)
+- 15 QEMU integration tests passing
+- All Rust crate tests passing
+
 ## [0.1.0] — 2026-02-27
 
 ### Added

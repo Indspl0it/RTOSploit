@@ -21,6 +21,7 @@ err_console = Console(stderr=True)
 @click.option("--quiet", "-q", is_flag=True, default=False, help="Suppress info, show only warnings/errors.")
 @click.option("--json", "output_json", is_flag=True, default=False, help="Output results as JSON.")
 @click.option("--config", type=click.Path(exists=False), default=None, help="Path to .rtosploit.yaml config file.")
+@click.option("--debug", is_flag=True, default=False, hidden=True, help="Enable debug mode (interactive).")
 @click.pass_context
 def cli(
     ctx: click.Context,
@@ -28,6 +29,7 @@ def cli(
     quiet: bool,
     output_json: bool,
     config: str | None,
+    debug: bool,
 ) -> None:
     """RTOSploit — RTOS Exploitation & Bare-Metal Fuzzing Framework.
 
@@ -60,6 +62,12 @@ from rtosploit.cli.commands.analyze import analyze
 from rtosploit.cli.commands.svd import svd
 from rtosploit.cli.commands.vulnrange import vulnrange
 from rtosploit.cli.commands.console_cmd import console_cmd
+from rtosploit.cli.commands.report import report
+from rtosploit.cli.commands.triage import triage
+from rtosploit.cli.commands.coverage import coverage
+from rtosploit.cli.commands.cve import cve
+from rtosploit.cli.commands.scan import scan
+from rtosploit.cli.commands.rehost import rehost
 
 cli.add_command(emulate)
 cli.add_command(fuzz)
@@ -69,10 +77,50 @@ cli.add_command(analyze)
 cli.add_command(svd)
 cli.add_command(vulnrange)
 cli.add_command(console_cmd)
+cli.add_command(report)
+cli.add_command(triage)
+cli.add_command(coverage)
+cli.add_command(cve)
+cli.add_command(scan)
+cli.add_command(rehost)
+
+
+def _should_launch_interactive() -> bool:
+    """Check if we should launch interactive mode (no subcommand given)."""
+    # Strip global flags to see if a subcommand is present
+    args = sys.argv[1:]
+    known_flags = {
+        "--verbose", "-v", "--quiet", "-q", "--json", "--config", "--version", "--help",
+        "--debug",
+    }
+    remaining = []
+    skip_next = False
+    for arg in args:
+        if skip_next:
+            skip_next = False
+            continue
+        if arg == "--config":
+            skip_next = True  # --config takes a value
+            continue
+        if arg in known_flags:
+            continue
+        remaining.append(arg)
+
+    return len(remaining) == 0 and "--help" not in args and "--version" not in args
 
 
 def main() -> None:
-    """Entry point wrapper with global exception handling."""
+    """Entry point wrapper with global exception handling.
+
+    Launches interactive mode when invoked with no subcommand,
+    or delegates to Click CLI for subcommands.
+    """
+    if _should_launch_interactive():
+        debug = "--debug" in sys.argv or "--verbose" in sys.argv or "-v" in sys.argv
+        from rtosploit.interactive.app import interactive_main
+        interactive_main(debug=debug)
+        return
+
     try:
         cli(standalone_mode=False)
     except KeyboardInterrupt:

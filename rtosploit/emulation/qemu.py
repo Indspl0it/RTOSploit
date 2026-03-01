@@ -18,7 +18,7 @@ from rtosploit.emulation.qmp import QMPClient
 from rtosploit.utils.binary import load_firmware
 
 
-_MIN_QEMU_VERSION = (9, 0)
+_MIN_QEMU_VERSION = (8, 0)
 
 
 class QEMUInstance:
@@ -36,10 +36,22 @@ class QEMUInstance:
         self.gdb: Optional[Any] = None  # GDBClient, imported lazily
         self._machine: Optional[MachineConfig] = None
 
-    def _find_qemu_binary(self) -> str:
-        """Find a suitable qemu-system-arm binary.
+    _ARCH_TO_QEMU = {
+        "arm": "qemu-system-arm",
+        "aarch64": "qemu-system-aarch64",
+        "xtensa": "qemu-system-xtensa",
+        "riscv32": "qemu-system-riscv32",
+        "riscv64": "qemu-system-riscv64",
+        "mips": "qemu-system-mips",
+    }
 
-        Checks the configured binary name and PATH. Verifies version >= 9.0.
+    def _find_qemu_binary(self, architecture: str = "arm") -> str:
+        """Find a suitable QEMU system binary for the given architecture.
+
+        Checks the configured binary name and PATH. Verifies version >= 8.0.
+
+        Args:
+            architecture: Target architecture (arm, xtensa, riscv32, etc.).
 
         Returns:
             Absolute path to the QEMU binary.
@@ -47,10 +59,11 @@ class QEMUInstance:
         Raises:
             QEMUCrashError: If QEMU is not found or version is too old.
         """
+        arch_binary = self._ARCH_TO_QEMU.get(architecture, f"qemu-system-{architecture}")
         candidates = [
             self._config.qemu.binary,
-            "qemu-system-arm-rtosploit",  # Custom-built binary
-            "qemu-system-arm",
+            f"{arch_binary}-rtosploit",  # Custom-built binary
+            arch_binary,
         ]
 
         for candidate in candidates:
@@ -82,8 +95,8 @@ class QEMUInstance:
                 pass
 
         raise QEMUCrashError(
-            f"qemu-system-arm >= {_MIN_QEMU_VERSION[0]}.{_MIN_QEMU_VERSION[1]} not found. "
-            "Run scripts/setup-qemu.sh to build from source."
+            f"{arch_binary} >= {_MIN_QEMU_VERSION[0]}.{_MIN_QEMU_VERSION[1]} not found. "
+            f"Install via: apt-get install {arch_binary} or build from source."
         )
 
     def _build_command_line(
@@ -92,6 +105,7 @@ class QEMUInstance:
         firmware_path: str,
         gdb: bool = False,
         paused: bool = False,
+        extra_args: list[str] | None = None,
     ) -> list[str]:
         """Build the QEMU command-line arguments.
 
@@ -104,7 +118,7 @@ class QEMUInstance:
         Returns:
             List of command-line arguments (including the binary path).
         """
-        qemu_bin = self._find_qemu_binary()
+        qemu_bin = self._find_qemu_binary(machine.architecture)
 
         cmd = [
             qemu_bin,
@@ -136,7 +150,46 @@ class QEMUInstance:
         if paused:
             cmd.append("-S")
 
+        if extra_args:
+            cmd.extend(extra_args)
+
         return cmd
+
+    @staticmethod
+    def create_snapshot_drive(output_dir: str) -> list[str]:
+        """Create a qcow2 overlay for QEMU savevm snapshots.
+
+        Runs ``qemu-img create`` to produce a 64 MiB qcow2 image that can be
+        used as a pflash block device, which is required for QEMU's savevm /
+        loadvm snapshot support.
+
+        Args:
+            output_dir: Directory where the qcow2 file will be created.
+
+        Returns:
+            QEMU command-line arguments to attach the drive.
+
+        Raises:
+            QEMUCrashError: If qemu-img is not found or fails to create the image.
+        """
+        path = str(Path(output_dir) / "rtosploit-snap.qcow2")
+
+        try:
+            result = subprocess.run(
+                ["qemu-img", "create", "-f", "qcow2", path, "64M"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        except (FileNotFoundError, OSError) as e:
+            raise QEMUCrashError(f"qemu-img not found or failed: {e}") from e
+
+        if result.returncode != 0:
+            raise QEMUCrashError(
+                f"qemu-img create failed (exit {result.returncode}): {result.stderr}"
+            )
+
+        return ["-drive", f"file={path},format=qcow2,if=none,id=snap0"]
 
     def start(
         self,
@@ -144,6 +197,7 @@ class QEMUInstance:
         machine_name: str,
         gdb: bool = False,
         paused: bool = False,
+        extra_qemu_args: list[str] | None = None,
     ) -> None:
         """Start a QEMU process and connect QMP.
 
@@ -152,6 +206,7 @@ class QEMUInstance:
             machine_name: Machine name or path to load.
             gdb: If True, expose GDB stub.
             paused: If True, start the CPU paused.
+            extra_qemu_args: Additional QEMU command-line arguments to append.
 
         Raises:
             QEMUCrashError: If QEMU fails to start or QMP connection fails.
@@ -170,7 +225,9 @@ class QEMUInstance:
         # Generate unique QMP socket path
         self._qmp_socket_path = f"/tmp/rtosploit-qmp-{uuid.uuid4().hex}.sock"
 
-        cmd = self._build_command_line(machine, firmware_path, gdb=gdb, paused=paused)
+        cmd = self._build_command_line(
+            machine, firmware_path, gdb=gdb, paused=paused, extra_args=extra_qemu_args
+        )
 
         try:
             self._process = subprocess.Popen(

@@ -37,7 +37,7 @@ class FirmwareImage:
     sections: list[MemorySection] = field(default_factory=list)
     symbols: dict[str, int] = field(default_factory=dict)
     path: Path = field(default_factory=lambda: Path("."))
-    architecture: str = "armv7m"  # "armv7m" | "armv8m" | "riscv32" | "unknown"
+    architecture: str = "unknown"  # "armv7m" | "armv8m" | "riscv32" | "unknown"
 
     def read_word(self, address: int) -> int:
         """Read a 4-byte little-endian word at the given address."""
@@ -84,6 +84,94 @@ class FirmwareImage:
             except ValueError:
                 break
         return table
+
+
+def _detect_elf_architecture(elf: ELFFile) -> str:
+    """Detect architecture from ELF headers and attributes."""
+    from elftools.elf.sections import ARMAttributesSection
+
+    _ELF_MACHINE_TO_ARCH = {
+        40:  "arm",       # EM_ARM — refine via attributes
+        183: "aarch64",   # EM_AARCH64
+        243: "riscv32",   # EM_RISCV — refine via EI_CLASS
+        94:  "xtensa",    # EM_XTENSA
+        8:   "mips",      # EM_MIPS
+        83:  "avr",       # EM_AVR
+        105: "msp430",    # EM_MSP430
+        20:  "ppc",       # EM_PPC
+    }
+
+    e_machine = elf.header.e_machine
+    # Handle string enum values from pyelftools
+    if isinstance(e_machine, str):
+        _NAME_TO_NUM = {
+            "EM_ARM": 40, "EM_AARCH64": 183, "EM_RISCV": 243,
+            "EM_XTENSA": 94, "EM_MIPS": 8, "EM_AVR": 83,
+            "EM_MSP430": 105, "EM_PPC": 20,
+        }
+        e_machine = _NAME_TO_NUM.get(e_machine, -1)
+
+    arch = _ELF_MACHINE_TO_ARCH.get(e_machine, "unknown")
+
+    # Layer 2: ARM build attributes for precise Cortex-M/A/R detection
+    if arch == "arm":
+        for section in elf.iter_sections():
+            if isinstance(section, ARMAttributesSection):
+                for subsec in section.subsections:
+                    for subsubsec in subsec.subsubsections:
+                        profile = None
+                        cpu_name = None
+                        for attr in subsubsec.iter_attributes():
+                            if attr.tag == "TAG_CPU_ARCH_PROFILE":
+                                profile = attr.value
+                            elif attr.tag == "TAG_CPU_NAME":
+                                cpu_name = attr.value
+                        if profile == 0x4D or (isinstance(profile, str) and profile == "M"):
+                            # M-profile: check for v8-M cores
+                            if cpu_name and any(v8m in cpu_name for v8m in ("M33", "M23", "M55", "M85")):
+                                return "armv8m"
+                            return "armv7m"
+                        elif profile == 0x41 or (isinstance(profile, str) and profile == "A"):
+                            return "arm"
+                        elif profile == 0x52 or (isinstance(profile, str) and profile == "R"):
+                            return "arm"
+        # No attributes section — default to armv7m for EM_ARM
+        return "armv7m"
+
+    # Layer 3: RISC-V refinement
+    if arch == "riscv32":
+        ei_class = elf.header.e_ident.EI_CLASS
+        if isinstance(ei_class, str):
+            if ei_class == "ELFCLASS64":
+                return "riscv64"
+        elif ei_class == 2:  # ELFCLASS64
+            return "riscv64"
+        # Check for RVE (embedded) via e_flags
+        e_flags = elf.header.e_flags
+        if isinstance(e_flags, int) and (e_flags & 0x8):  # EF_RISCV_RVE
+            return "riscv32e"
+
+    return arch
+
+
+def _detect_raw_architecture(data: bytes) -> str:
+    """Detect architecture from raw binary heuristics."""
+    if len(data) == 0:
+        return "unknown"
+
+    # ESP32 factory binary: first byte is 0xE9
+    if data[0] == 0xE9:
+        return "xtensa"
+
+    # Cortex-M vector table: first 8 bytes are initial_sp and reset_vector
+    if len(data) >= 8:
+        sp, reset = struct.unpack_from("<II", data, 0)
+        if (0x2000_0000 <= sp <= 0x2100_0000
+                and 0x0000_0001 <= reset <= 0x1000_0000
+                and (reset & 1)):
+            return "armv7m"
+
+    return "unknown"
 
 
 def detect_format(path: Path) -> BinaryFormat:
@@ -152,6 +240,9 @@ def load_elf(path: Path) -> FirmwareImage:
                 if sym.name and sym["st_value"] != 0:
                     symbols[sym.name] = sym["st_value"]
 
+        # Detect architecture
+        architecture = _detect_elf_architecture(elf)
+
     if base_address is None:
         base_address = 0
 
@@ -178,6 +269,7 @@ def load_elf(path: Path) -> FirmwareImage:
         sections=sections,
         symbols=symbols,
         path=path,
+        architecture=architecture,
     )
 
 
@@ -289,6 +381,7 @@ def load_srec(path: Path) -> FirmwareImage:
 def load_raw(path: Path, base_address: int) -> FirmwareImage:
     """Load a raw binary file. base_address must be provided by caller."""
     data = path.read_bytes()
+    architecture = _detect_raw_architecture(data)
     # Entry point for raw ARM binaries is typically base+1 (Thumb mode) or base+4 (reset vector)
     entry_point = base_address + 4  # conservative default; caller can override
     return FirmwareImage(
@@ -297,6 +390,7 @@ def load_raw(path: Path, base_address: int) -> FirmwareImage:
         entry_point=entry_point,
         format=BinaryFormat.RAW,
         path=path,
+        architecture=architecture,
     )
 
 

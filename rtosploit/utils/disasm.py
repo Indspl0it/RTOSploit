@@ -22,11 +22,19 @@ class Instruction:
         return f"0x{self.address:08x}:  {self.bytes.hex():<12}  {self.mnemonic} {self.op_str}"
 
 
-ARCH_MAP = {
-    "armv7m": (capstone.CS_ARCH_ARM, capstone.CS_MODE_THUMB),
-    "armv8m": (capstone.CS_ARCH_ARM, capstone.CS_MODE_THUMB),
+ARCH_MAP: dict[str, tuple[int, int]] = {
+    "armv7m":  (capstone.CS_ARCH_ARM, capstone.CS_MODE_THUMB),
+    "armv8m":  (capstone.CS_ARCH_ARM, capstone.CS_MODE_THUMB),
+    "arm":     (capstone.CS_ARCH_ARM, capstone.CS_MODE_ARM),
     "riscv32": (capstone.CS_ARCH_RISCV, capstone.CS_MODE_RISCV32),
+    "riscv64": (capstone.CS_ARCH_RISCV, capstone.CS_MODE_RISCV64),
+    "mips":    (capstone.CS_ARCH_MIPS, capstone.CS_MODE_MIPS32),
+    "xtensa":  (capstone.CS_ARCH_XTENSA, capstone.CS_MODE_LITTLE_ENDIAN),
 }
+
+# AArch64 support depends on capstone version
+if hasattr(capstone, "CS_ARCH_ARM64"):
+    ARCH_MAP["aarch64"] = (capstone.CS_ARCH_ARM64, capstone.CS_MODE_ARM)
 
 
 def _make_cs(arch: str) -> capstone.Cs:

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "rtosploit"
-version = "0.1.0"
+dynamic = ["version"]
 description = "RTOS Exploitation & Bare-Metal Fuzzing Framework"
 readme = "README.md"
 license = {text = "GPL-3.0-only"}
@@ -32,6 +32,7 @@ dependencies = [
     "capstone>=5.0",
     "jinja2>=3.1",
     "prompt_toolkit>=3.0",
+    "questionary>=2.1",
 ]
 
 [project.optional-dependencies]
@@ -45,11 +46,15 @@ dev = [
 ]
 
 [project.scripts]
-rtosploit = "rtosploit.cli.main:cli"
+rtosploit = "rtosploit.cli.main:main"
 
 [project.urls]
 Homepage = "https://github.com/rtosploit/rtosploit"
 Repository = "https://github.com/rtosploit/rtosploit"
+
+[tool.hatch.version]
+path = "VERSION"
+pattern = "(?P<version>.+)"
 
 # Maturin configuration for building optional Rust/PyO3 extensions.
 # The default build backend remains Hatchling (pure-Python). Use Maturin

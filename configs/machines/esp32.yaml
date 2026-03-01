@@ -1,0 +1,55 @@
+# NOTE: ESP32 emulation requires qemu-system-xtensa from the espressif/qemu fork.
+# See: https://github.com/espressif/qemu
+machine:
+  name: esp32
+  qemu_machine: esp32
+  cpu: esp32
+  architecture: xtensa
+
+memory:
+  flash:
+    base: 0x3F400000
+    size: 0x00400000
+    permissions: rx
+  sram:
+    base: 0x3FFB0000
+    size: 0x00082000
+    permissions: rwx
+  peripherals:
+    base: 0x3FF00000
+    size: 0x00080000
+    permissions: rw
+
+peripherals:
+  uart0:
+    base: 0x3FF40000
+    size: 0x1000
+    irq: 34
+  uart1:
+    base: 0x3FF50000
+    size: 0x1000
+    irq: 35
+  uart2:
+    base: 0x3FF6E000
+    size: 0x1000
+    irq: 36
+  timer_group0:
+    base: 0x3FF5F000
+    size: 0x1000
+    irq: 14
+  timer_group1:
+    base: 0x3FF60000
+    size: 0x1000
+    irq: 15
+  gpio:
+    base: 0x3FF44000
+    size: 0x1000
+    irq: 22
+  spi0:
+    base: 0x3FF43000
+    size: 0x1000
+    irq: 28
+  interrupt_controller:
+    base: 0x3FF00000
+    size: 0x1000
+    builtin: true

@@ -589,7 +589,7 @@ class TestSnapshotManager:
         manager.save(qemu, "fuzzing-base")
 
         qemu.pause.assert_called_once()
-        qemu.qmp.execute.assert_any_call("savevm", {"name": "fuzzing-base"})
+        qemu.qmp.execute.assert_any_call("human-monitor-command", {"command-line": "savevm fuzzing-base"})
         qemu.resume.assert_called_once()
 
     def test_save_stores_metadata(self):
@@ -610,7 +610,7 @@ class TestSnapshotManager:
 
         manager.load(qemu, "fuzzing-base")
 
-        qemu.qmp.execute.assert_called_once_with("loadvm", {"name": "fuzzing-base"})
+        qemu.qmp.execute.assert_called_once_with("human-monitor-command", {"command-line": "loadvm fuzzing-base"})
 
     def test_delete_calls_delvm(self):
         """delete() calls QMP delvm and removes from metadata."""
@@ -620,7 +620,7 @@ class TestSnapshotManager:
 
         manager.delete(qemu, "old-snap")
 
-        qemu.qmp.execute.assert_called_once_with("delvm", {"name": "old-snap"})
+        qemu.qmp.execute.assert_called_once_with("human-monitor-command", {"command-line": "delvm old-snap"})
         assert "old-snap" not in manager._metadata
 
     def test_list_snapshots_returns_qmp_result(self):
@@ -647,7 +647,7 @@ class TestSnapshotManager:
         manager.fast_reset(qemu, "fuzz-base")
 
         calls = qemu.qmp.execute.call_args_list
-        assert calls[0] == call("loadvm", {"name": "fuzz-base"})
+        assert calls[0] == call("human-monitor-command", {"command-line": "loadvm fuzz-base"})
         assert calls[1] == call("cont")
 
     def test_save_persists_index_to_disk(self, tmp_path):

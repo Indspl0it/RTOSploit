@@ -63,16 +63,36 @@ def shellcode_cmd(ctx, arch, shellcode_type, encoder, bad_chars, output_format, 
     elif encoder == "nullfree":
         raw_bytes = bytes(b if b != 0 else 1 for b in raw_bytes)
 
+    # Filter bad characters
+    if bad_chars:
+        from rtosploit.payloads.shellcode import filter_bad_chars
+        bad = bytes.fromhex(bad_chars)
+        raw_bytes = filter_bad_chars(raw_bytes, bad)
+        encoder = f"{encoder}+xor_badchar"
+
     output_json = ctx.obj.get("output_json", False)
 
     if output_json:
         import json
+        # Format the payload according to --format flag
+        if output_format == "c":
+            hex_str = ", ".join(f"0x{b:02x}" for b in raw_bytes)
+            formatted = f"unsigned char shellcode[] = {{{hex_str}}};  // {len(raw_bytes)} bytes"
+        elif output_format == "python":
+            hex_str = "".join(f"\\x{b:02x}" for b in raw_bytes)
+            formatted = f'shellcode = b"{hex_str}"  # {len(raw_bytes)} bytes'
+        elif output_format == "raw":
+            formatted = raw_bytes.hex()
+        else:
+            formatted = raw_bytes.hex()
+
         click.echo(json.dumps({
             "arch": arch,
             "type": shellcode_type,
             "encoder": encoder,
             "length": len(raw_bytes),
             "hex": raw_bytes.hex(),
+            "formatted": formatted,
         }))
         return
 
@@ -133,11 +153,19 @@ def rop_cmd(ctx, binary, arch, goal, bad_chars, load_addr, output_format):
 
     if output_json:
         import json
+        # Format the chain according to --format flag
+        if output_format == "python":
+            hex_str = "".join(f"\\x{b:02x}" for b in chain_bytes)
+            formatted = f'rop_chain = b"{hex_str}"'
+        else:
+            formatted = chain_bytes.hex()
+
         click.echo(json.dumps({
             "goal": goal,
             "gadgets_found": len(gadgets),
             "chain_length": len(chain_bytes),
             "chain_hex": chain_bytes.hex(),
+            "formatted": formatted,
         }))
         return
 

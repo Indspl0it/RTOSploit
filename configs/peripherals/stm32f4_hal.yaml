@@ -1,0 +1,160 @@
+# STM32 HAL v1 peripheral configuration
+# Supports: STM32F4, F1, F7, L4 families
+# Usage: rtosploit rehost --firmware fw.elf --peripheral-config configs/peripherals/stm32f4_hal.yaml
+
+peripherals:
+  hal_base:
+    model: rtosploit.peripherals.models.stm32_hal.STM32HALBase
+    base_addr: 0x00000000
+    size: 0
+
+  rcc:
+    model: rtosploit.peripherals.models.stm32_hal.STM32RCC
+    base_addr: 0x40023800
+    size: 0x400
+
+  gpio_a:
+    model: rtosploit.peripherals.models.stm32_hal.STM32GPIO
+    base_addr: 0x40020000
+    size: 0x400
+
+  gpio_b:
+    model: rtosploit.peripherals.models.stm32_hal.STM32GPIO
+    base_addr: 0x40020400
+    size: 0x400
+
+  gpio_c:
+    model: rtosploit.peripherals.models.stm32_hal.STM32GPIO
+    base_addr: 0x40020800
+    size: 0x400
+
+  uart1:
+    model: rtosploit.peripherals.models.stm32_hal.STM32UART
+    base_addr: 0x40011000
+    size: 0x400
+    irq: 37
+    args:
+      uart_id: 1
+
+  uart2:
+    model: rtosploit.peripherals.models.stm32_hal.STM32UART
+    base_addr: 0x40004400
+    size: 0x400
+    irq: 38
+    args:
+      uart_id: 2
+
+  spi1:
+    model: rtosploit.peripherals.models.stm32_hal.STM32SPI
+    base_addr: 0x40013000
+    size: 0x400
+
+  i2c1:
+    model: rtosploit.peripherals.models.stm32_hal.STM32I2C
+    base_addr: 0x40005400
+    size: 0x400
+
+  flash:
+    model: rtosploit.peripherals.models.stm32_hal.STM32Flash
+    base_addr: 0x40023C00
+    size: 0x400
+
+  tim1:
+    model: rtosploit.peripherals.models.stm32_hal.STM32Timer
+    base_addr: 0x40010000
+    size: 0x400
+
+intercepts:
+  # Core HAL
+  - class: rtosploit.peripherals.models.stm32_hal.STM32HALBase
+    function: HAL_Init
+    symbol: HAL_Init
+  - class: rtosploit.peripherals.models.stm32_hal.STM32HALBase
+    function: HAL_GetTick
+    symbol: HAL_GetTick
+  - class: rtosploit.peripherals.models.stm32_hal.STM32HALBase
+    function: HAL_Delay
+    symbol: HAL_Delay
+  - class: rtosploit.peripherals.models.stm32_hal.STM32HALBase
+    function: HAL_IncTick
+    symbol: HAL_IncTick
+
+  # RCC
+  - class: rtosploit.peripherals.models.stm32_hal.STM32RCC
+    function: HAL_RCC_OscConfig
+    symbol: HAL_RCC_OscConfig
+  - class: rtosploit.peripherals.models.stm32_hal.STM32RCC
+    function: HAL_RCC_ClockConfig
+    symbol: HAL_RCC_ClockConfig
+  - class: rtosploit.peripherals.models.stm32_hal.STM32RCC
+    function: SystemClock_Config
+    symbol: SystemClock_Config
+
+  # GPIO
+  - class: rtosploit.peripherals.models.stm32_hal.STM32GPIO
+    function: HAL_GPIO_Init
+    symbol: HAL_GPIO_Init
+  - class: rtosploit.peripherals.models.stm32_hal.STM32GPIO
+    function: HAL_GPIO_ReadPin
+    symbol: HAL_GPIO_ReadPin
+  - class: rtosploit.peripherals.models.stm32_hal.STM32GPIO
+    function: HAL_GPIO_WritePin
+    symbol: HAL_GPIO_WritePin
+  - class: rtosploit.peripherals.models.stm32_hal.STM32GPIO
+    function: HAL_GPIO_TogglePin
+    symbol: HAL_GPIO_TogglePin
+
+  # UART
+  - class: rtosploit.peripherals.models.stm32_hal.STM32UART
+    function: HAL_UART_Init
+    symbol: HAL_UART_Init
+  - class: rtosploit.peripherals.models.stm32_hal.STM32UART
+    function: HAL_UART_Transmit
+    symbol: HAL_UART_Transmit
+  - class: rtosploit.peripherals.models.stm32_hal.STM32UART
+    function: HAL_UART_Receive
+    symbol: HAL_UART_Receive
+
+  # SPI
+  - class: rtosploit.peripherals.models.stm32_hal.STM32SPI
+    function: HAL_SPI_Init
+    symbol: HAL_SPI_Init
+  - class: rtosploit.peripherals.models.stm32_hal.STM32SPI
+    function: HAL_SPI_Transmit
+    symbol: HAL_SPI_Transmit
+  - class: rtosploit.peripherals.models.stm32_hal.STM32SPI
+    function: HAL_SPI_Receive
+    symbol: HAL_SPI_Receive
+
+  # I2C
+  - class: rtosploit.peripherals.models.stm32_hal.STM32I2C
+    function: HAL_I2C_Init
+    symbol: HAL_I2C_Init
+  - class: rtosploit.peripherals.models.stm32_hal.STM32I2C
+    function: HAL_I2C_Master_Transmit
+    symbol: HAL_I2C_Master_Transmit
+  - class: rtosploit.peripherals.models.stm32_hal.STM32I2C
+    function: HAL_I2C_Master_Receive
+    symbol: HAL_I2C_Master_Receive
+
+  # Flash
+  - class: rtosploit.peripherals.models.stm32_hal.STM32Flash
+    function: HAL_FLASH_Unlock
+    symbol: HAL_FLASH_Unlock
+  - class: rtosploit.peripherals.models.stm32_hal.STM32Flash
+    function: HAL_FLASH_Lock
+    symbol: HAL_FLASH_Lock
+  - class: rtosploit.peripherals.models.stm32_hal.STM32Flash
+    function: HAL_FLASH_Program
+    symbol: HAL_FLASH_Program
+
+  # Timer
+  - class: rtosploit.peripherals.models.stm32_hal.STM32Timer
+    function: HAL_TIM_Base_Init
+    symbol: HAL_TIM_Base_Init
+  - class: rtosploit.peripherals.models.stm32_hal.STM32Timer
+    function: HAL_TIM_Base_Start
+    symbol: HAL_TIM_Base_Start
+  - class: rtosploit.peripherals.models.stm32_hal.STM32Timer
+    function: HAL_TIM_Base_Start_IT
+    symbol: HAL_TIM_Base_Start_IT

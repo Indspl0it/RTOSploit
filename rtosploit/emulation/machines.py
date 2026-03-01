@@ -29,6 +29,12 @@ _VALID_QEMU_MACHINES = {
     "vexpress-a9",
     "realview-pbx-a9",
     "virt",
+    "musca-a",
+    "nrf51",
+    "raspi2b",
+    "sifive_e",
+    "sifive_u",
+    "esp32",
 }
 
 

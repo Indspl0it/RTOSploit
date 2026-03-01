@@ -1,14 +1,15 @@
 """rtosploit fuzz — start QEMU-based firmware fuzzer."""
 import os
-import random
-import shutil
-import time
+import threading
 
 import click
 from rich.console import Console
-from rich.live import Live
-from rich.panel import Panel
-from rich.table import Table
+
+from rtosploit.interactive.dashboard import (
+    build_dashboard_table as _build_dashboard_table,
+    count_files as _count_files,
+    run_dashboard as _run_dashboard,
+)
 
 console = Console()
 
@@ -21,146 +22,156 @@ console = Console()
 @click.option("--seeds", "-s", type=click.Path(exists=True), default=None, help="Seed corpus directory")
 @click.option("--timeout", "-t", type=int, default=0, help="Fuzzing timeout in seconds (0=unlimited)")
 @click.option("--jobs", "-j", type=int, default=1, show_default=True, help="Parallel fuzzer instances")
+@click.option("--exec-timeout", type=float, default=0.05, show_default=True, help="Per-execution timeout in seconds")
+@click.option("--persistent", is_flag=True, default=False, help="Use persistent mode (system_reset instead of loadvm)")
+@click.option("--inject-addr", type=str, default="0x20010000", help="SRAM address for input injection (hex)")
+@click.option("--inject-len-addr", type=str, default=None, help="Address to write input length (hex)")
+@click.option("--corpus-dir", type=click.Path(), default=None, help="Corpus directory (default: {output}/corpus)")
+@click.option("--seed", type=click.Path(exists=True), default=None, help="Initial seed file or directory")
+@click.option("--coverage-addr", type=str, default=None, help="Address of coverage bitmap in target memory (hex)")
+@click.option("--peripheral-config", type=click.Path(exists=True), default=None, help="YAML peripheral config for HAL intercepts")
 @click.pass_context
-def fuzz(ctx, firmware, machine, rtos, output, seeds, timeout, jobs):
+def fuzz(ctx, firmware, machine, rtos, output, seeds, timeout, jobs,
+         exec_timeout, persistent,
+         inject_addr, inject_len_addr, corpus_dir, seed, coverage_addr,
+         peripheral_config):
     """Start fuzzing a firmware image with QEMU-based grey-box fuzzing.
 
     \b
     Example:
       rtosploit fuzz --firmware fw.bin --machine mps2-an385 --output ./output
-      rtosploit fuzz --firmware fw.bin --machine mps2-an385 --timeout 3600
+      rtosploit fuzz --firmware fw.bin --machine mps2-an385 --timeout 3600 --jobs 8
+      rtosploit fuzz --firmware fw.bin --machine mps2-an385 --exec-timeout 0.1 --persistent
     """
     output_json = ctx.obj.get("output_json", False)
 
-    result = {
-        "firmware": firmware,
-        "machine": machine,
-        "rtos": rtos,
-        "output": output,
-        "status": "started",
-        "crashes": 0,
-        "executions": 0,
-    }
+    # Parse hex addresses
+    inject_addr_int = int(inject_addr, 16)
+    inject_len_addr_int = int(inject_len_addr, 16) if inject_len_addr else None
+    coverage_addr_int = int(coverage_addr, 16) if coverage_addr else None
+
+    # Set corpus_dir default
+    if corpus_dir is None:
+        corpus_dir = f"{output}/corpus"
+
+    # Create output directories
+    os.makedirs(output, exist_ok=True)
+    os.makedirs(f"{output}/crashes", exist_ok=True)
+    os.makedirs(corpus_dir, exist_ok=True)
 
     if output_json:
         import json
+
+        if timeout > 0:
+            from rtosploit.fuzzing import FuzzEngine
+
+            engine = FuzzEngine(
+                firmware_path=firmware,
+                machine_name=machine,
+                inject_addr=inject_addr_int,
+                inject_size=256,
+                inject_len_addr=inject_len_addr_int,
+                coverage_addr=coverage_addr_int,
+                exec_timeout=exec_timeout,
+                jobs=jobs,
+                persistent_mode=persistent,
+            )
+
+            final = engine.run(
+                timeout=timeout,
+                corpus_dir=corpus_dir,
+                crash_dir=f"{output}/crashes",
+            )
+
+            result = {
+                "firmware": firmware,
+                "machine": machine,
+                "rtos": rtos,
+                "output": output,
+                "peripheral_config": peripheral_config,
+                "status": "completed",
+                "jobs": jobs,
+                "exec_timeout": exec_timeout,
+                "crashes": final.crashes,
+                "executions": final.executions,
+                "coverage": final.coverage,
+                "corpus_size": final.corpus_size,
+                "elapsed": round(final.elapsed, 1),
+                "exec_per_sec": round(final.exec_per_sec, 1),
+            }
+        else:
+            result = {
+                "firmware": firmware,
+                "machine": machine,
+                "rtos": rtos,
+                "output": output,
+                "peripheral_config": peripheral_config,
+                "status": "started",
+                "crashes": 0,
+                "executions": 0,
+                "coverage": 0.0,
+                "corpus_size": 0,
+                "elapsed": 0.0,
+            }
         click.echo(json.dumps(result, indent=2))
         return
 
     console.print("[bold green]RTOSploit Fuzzer[/bold green]")
-    console.print(f"  Firmware:  [cyan]{firmware}[/cyan]")
-    console.print(f"  Machine:   [cyan]{machine}[/cyan]")
-    console.print(f"  RTOS:      [cyan]{rtos}[/cyan]")
-    console.print(f"  Output:    [cyan]{output}[/cyan]")
-    console.print(f"  Jobs:      [cyan]{jobs}[/cyan]")
+    console.print(f"  Firmware:    [cyan]{firmware}[/cyan]")
+    console.print(f"  Machine:     [cyan]{machine}[/cyan]")
+    console.print(f"  RTOS:        [cyan]{rtos}[/cyan]")
+    console.print(f"  Output:      [cyan]{output}[/cyan]")
+    console.print(f"  Jobs:        [cyan]{jobs}[/cyan]")
+    console.print(f"  Exec timeout:[cyan]{exec_timeout}s[/cyan]")
+    if persistent:
+        console.print("  Mode:        [cyan]persistent (system_reset)[/cyan]")
     if timeout:
-        console.print(f"  Timeout:   [cyan]{timeout}s[/cyan]")
+        console.print(f"  Timeout:     [cyan]{timeout}s[/cyan]")
 
     console.print("\n[dim]Starting fuzzer... (Ctrl+C to stop)[/dim]")
 
-    # Create output directory
-    os.makedirs(output, exist_ok=True)
-    os.makedirs(f"{output}/crashes", exist_ok=True)
-    os.makedirs(f"{output}/corpus", exist_ok=True)
+    from rtosploit.fuzzing import FuzzEngine
 
-    # Determine if the Rust fuzzer binary is available
-    fuzzer_bin = shutil.which("rtosploit-fuzzer")
-    simulation = fuzzer_bin is None
+    engine = FuzzEngine(
+        firmware_path=firmware,
+        machine_name=machine,
+        inject_addr=inject_addr_int,
+        inject_size=256,
+        inject_len_addr=inject_len_addr_int,
+        coverage_addr=coverage_addr_int,
+        exec_timeout=exec_timeout,
+        jobs=jobs,
+        persistent_mode=persistent,
+    )
 
-    if simulation:
-        console.print("[yellow]Rust fuzzer binary not found — running in simulation mode.[/yellow]")
-    else:
-        console.print(f"[green]Found fuzzer:[/green] {fuzzer_bin}")
+    engine_stats = {}
+    if peripheral_config:
+        engine_stats["peripheral_config"] = peripheral_config
 
-    _run_dashboard(output, simulation, timeout)
+    def stats_provider():
+        return engine_stats
+
+    def on_engine_stats(stats):
+        engine_stats.update(stats)
+
+    # Run engine in background thread
+    engine_thread = threading.Thread(
+        target=engine.run,
+        kwargs={
+            "timeout": timeout,
+            "corpus_dir": corpus_dir,
+            "crash_dir": f"{output}/crashes",
+            "on_stats": on_engine_stats,
+        },
+        daemon=True,
+    )
+    engine_thread.start()
+
+    _run_dashboard(
+        output, timeout=timeout,
+        console=console, stats_provider=stats_provider,
+    )
+
+    engine_thread.join(timeout=5)
 
     console.print(f"\n[green]Fuzzer stopped.[/green] Output directory: [cyan]{output}[/cyan]")
-    if simulation:
-        console.print(
-            f"[dim]Run 'cargo run -p rtosploit-fuzzer -- --firmware {firmware} "
-            f"--machine {machine} --output {output}' for real fuzzing.[/dim]"
-        )
-
-
-def _build_dashboard_table(
-    elapsed: float,
-    executions: int,
-    crashes: int,
-    coverage: float,
-    corpus_size: int,
-) -> Panel:
-    """Build a Rich Table wrapped in a Panel for the fuzzer dashboard."""
-    exec_per_sec = executions / elapsed if elapsed > 0 else 0.0
-
-    table = Table(show_header=True, header_style="bold cyan", expand=True)
-    table.add_column("Metric", style="bold")
-    table.add_column("Value", justify="right")
-
-    mins, secs = divmod(int(elapsed), 60)
-    hrs, mins = divmod(mins, 60)
-    table.add_row("Elapsed Time", f"{hrs:02d}:{mins:02d}:{secs:02d}")
-    table.add_row("Executions", f"{executions:,}")
-    table.add_row("Exec/sec", f"{exec_per_sec:,.1f}")
-    table.add_row("Crashes Found", f"[bold red]{crashes}[/bold red]" if crashes else "0")
-    table.add_row("Coverage %", f"{coverage:.1f}%")
-    table.add_row("Corpus Size", f"{corpus_size:,}")
-
-    return Panel(table, title="[bold green]RTOSploit Fuzzer Dashboard[/bold green]", border_style="green")
-
-
-def _count_files(directory: str) -> int:
-    """Count files in a directory (non-recursive)."""
-    try:
-        return len([f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))])
-    except FileNotFoundError:
-        return 0
-
-
-def _run_dashboard(output: str, simulation: bool, timeout: int) -> None:
-    """Run the live-updating fuzzer dashboard."""
-    start = time.monotonic()
-    sim_executions = 0
-    sim_crashes = 0
-    sim_coverage = 0.0
-    sim_corpus = 0
-
-    try:
-        with Live(
-            _build_dashboard_table(0, 0, 0, 0.0, 0),
-            console=console,
-            refresh_per_second=2,
-        ) as live:
-            while True:
-                elapsed = time.monotonic() - start
-
-                if timeout and elapsed >= timeout:
-                    break
-
-                if simulation:
-                    # Simulated data with realistic fuzzer behaviour
-                    sim_executions += random.randint(80, 200)
-                    if random.random() < 0.02:
-                        sim_crashes += 1
-                    sim_coverage = min(100.0, sim_coverage + random.uniform(0.01, 0.15))
-                    if random.random() < 0.08:
-                        sim_corpus += 1
-
-                    crashes = sim_crashes
-                    executions = sim_executions
-                    coverage = sim_coverage
-                    corpus_size = sim_corpus
-                else:
-                    # Monitor real output directories
-                    crashes = _count_files(f"{output}/crashes")
-                    corpus_size = _count_files(f"{output}/corpus")
-                    # Real exec count / coverage would come from fuzzer stats file
-                    executions = 0
-                    coverage = 0.0
-
-                live.update(
-                    _build_dashboard_table(elapsed, executions, crashes, coverage, corpus_size)
-                )
-
-                time.sleep(0.5)
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Fuzzer interrupted by user.[/yellow]")

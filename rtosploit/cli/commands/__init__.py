@@ -6,5 +6,6 @@ from .payload import payload
 from .analyze import analyze
 from .svd import svd
 from .vulnrange import vulnrange
+from .report import report
 
-__all__ = ["emulate", "fuzz", "exploit", "payload", "analyze", "svd", "vulnrange"]
+__all__ = ["emulate", "fuzz", "exploit", "payload", "analyze", "svd", "vulnrange", "report"]

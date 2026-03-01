@@ -489,13 +489,14 @@ def svd_download(ctx, device, output_dir):
         raise SystemExit(1)
 
     # Try common filename patterns: exact name, uppercase, with .svd extension
+    # Deduplicate while preserving order (e.g. when device is already uppercase)
     device_upper = device.upper()
-    candidates = [
+    candidates = list(dict.fromkeys([
         f"{device}.svd",
         f"{device_upper}.svd",
         f"{device}.xml",
         f"{device_upper}.xml",
-    ]
+    ]))
 
     os.makedirs(output_dir, exist_ok=True)
 

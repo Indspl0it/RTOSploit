@@ -1,0 +1,52 @@
+machine:
+  name: sifive_e
+  qemu_machine: sifive_e
+  cpu: sifive-e31
+  architecture: riscv32
+
+memory:
+  flash:
+    base: 0x20000000
+    size: 0x20000000
+    permissions: rx
+  sram:
+    base: 0x80000000
+    size: 0x00004000
+    permissions: rwx
+  peripherals:
+    base: 0x00000000
+    size: 0x20000000
+    permissions: rw
+
+peripherals:
+  uart0:
+    base: 0x10013000
+    size: 0x1000
+    irq: 3
+  uart1:
+    base: 0x10023000
+    size: 0x1000
+    irq: 4
+  gpio:
+    base: 0x10012000
+    size: 0x1000
+    irq: 8
+  plic:
+    base: 0x0C000000
+    size: 0x4000000
+    builtin: true
+  clint:
+    base: 0x02000000
+    size: 0x10000
+    builtin: true
+  prci:
+    base: 0x10008000
+    size: 0x1000
+  spi0:
+    base: 0x10014000
+    size: 0x1000
+    irq: 5
+  pwm0:
+    base: 0x10015000
+    size: 0x1000
+    irq: 40

@@ -262,13 +262,59 @@ class GDBClient:
             raise OperationError("GDB client is not connected")
         self._send_packet("s")
 
-    def receive_stop(self) -> str:
+    def send_break(self) -> None:
+        """Send a break interrupt (0x03) to halt a running target.
+
+        This sends the raw byte directly on the socket without RSP framing.
+
+        Raises:
+            OperationError: If the client is not connected.
+        """
+        if self._sock is None:
+            raise OperationError("GDB client is not connected")
+        self._sock.sendall(b"\x03")
+
+    def receive_stop(self, timeout: float = 10.0) -> str:
         """Wait for and receive a stop reply packet.
+
+        Args:
+            timeout: Maximum seconds to wait for a stop reply.
 
         Returns:
             Stop reply string (e.g. "S05" for SIGTRAP).
+
+        Raises:
+            TimeoutError: If no stop reply is received within *timeout* seconds.
         """
-        return self._recv_packet()
+        if self._sock is None:
+            raise OperationError("GDB client is not connected")
+        old_timeout = self._sock.gettimeout()
+        self._sock.settimeout(timeout)
+        try:
+            return self._recv_packet()
+        except (socket.timeout, TimeoutError, OSError) as e:
+            raise TimeoutError(f"GDB stop reply timed out after {timeout}s") from e
+        finally:
+            self._sock.settimeout(old_timeout)
+
+    def read_register(self, name: str) -> int:
+        """Read a single register by name.
+
+        Convenience wrapper around :meth:`read_registers`.
+
+        Args:
+            name: Register name (e.g. "pc", "sp", "r0").
+
+        Returns:
+            The 32-bit register value.
+
+        Raises:
+            OperationError: If the register name is not found.
+        """
+        regs = self.read_registers()
+        if name not in regs:
+            raise OperationError(f"Register '{name}' not found in register set")
+        return regs[name]
 
     def detach(self) -> None:
         """Detach from the target via 'D' and close the socket."""

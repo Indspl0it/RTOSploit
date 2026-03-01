@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RTOSploit Engagement Report — {{ report.engagement_id }}</title>
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --bg-card: #16213e;
+    --bg-table: #0f3460;
+    --text: #e0e0e0;
+    --text-dim: #8892a0;
+    --border: #2a3a5c;
+    --critical: #ff4757;
+    --high: #ff6b35;
+    --medium: #ffc048;
+    --low: #5b9cf6;
+    --info: #888;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 2rem;
+    line-height: 1.6;
+  }
+  h1 { color: #fff; margin-bottom: 0.5rem; }
+  .subtitle { color: var(--text-dim); margin-bottom: 2rem; font-size: 0.95rem; }
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  .summary-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    text-align: center;
+  }
+  .summary-card .count {
+    font-size: 2rem;
+    font-weight: bold;
+  }
+  .summary-card .label {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+  .count-critical { color: var(--critical); }
+  .count-high { color: var(--high); }
+  .count-medium { color: var(--medium); }
+  .count-low { color: var(--low); }
+  .count-info { color: var(--info); }
+  .count-total { color: #fff; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 2rem;
+    background: var(--bg-card);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  th {
+    background: var(--bg-table);
+    padding: 0.75rem 1rem;
+    text-align: left;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  th:hover { background: #1a4a80; }
+  th .sort-arrow { margin-left: 4px; font-size: 0.75rem; }
+  td { padding: 0.75rem 1rem; border-top: 1px solid var(--border); }
+  tr:hover td { background: rgba(255,255,255,0.03); }
+  .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .badge-critical { background: var(--critical); color: #fff; }
+  .badge-high { background: var(--high); color: #fff; }
+  .badge-medium { background: var(--medium); color: #1a1a2e; }
+  .badge-low { background: var(--low); color: #fff; }
+  .badge-info { background: var(--info); color: #fff; }
+  .detail-toggle {
+    cursor: pointer;
+    color: var(--low);
+    font-size: 0.85rem;
+    text-decoration: underline;
+  }
+  .detail-section {
+    display: none;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem;
+    margin-top: 0.5rem;
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .detail-section.open { display: block; }
+  .metadata {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 2rem;
+    font-size: 0.9rem;
+  }
+  .metadata dt { color: var(--text-dim); display: inline; }
+  .metadata dt::after { content: ': '; }
+  .metadata dd { display: inline; margin-right: 2rem; }
+  footer {
+    margin-top: 3rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<h1>RTOSploit Engagement Report</h1>
+<p class="subtitle">Engagement ID: {{ report.engagement_id }}</p>
+
+<dl class="metadata">
+  <dt>Firmware</dt><dd>{{ report.target_firmware }}</dd>
+  {% if report.target_rtos %}<dt>RTOS</dt><dd>{{ report.target_rtos }}</dd>{% endif %}
+  {% if report.target_version %}<dt>Version</dt><dd>{{ report.target_version }}</dd>{% endif %}
+  <dt>Architecture</dt><dd>{{ report.target_architecture }}</dd>
+</dl>
+
+<div class="summary-grid">
+  <div class="summary-card">
+    <div class="count count-total">{{ total_findings }}</div>
+    <div class="label">Total</div>
+  </div>
+  <div class="summary-card">
+    <div class="count count-critical">{{ severity_counts.critical }}</div>
+    <div class="label">Critical</div>
+  </div>
+  <div class="summary-card">
+    <div class="count count-high">{{ severity_counts.high }}</div>
+    <div class="label">High</div>
+  </div>
+  <div class="summary-card">
+    <div class="count count-medium">{{ severity_counts.medium }}</div>
+    <div class="label">Medium</div>
+  </div>
+  <div class="summary-card">
+    <div class="count count-low">{{ severity_counts.low }}</div>
+    <div class="label">Low</div>
+  </div>
+  <div class="summary-card">
+    <div class="count count-info">{{ severity_counts.info }}</div>
+    <div class="label">Info</div>
+  </div>
+</div>
+
+{% if report.findings %}
+<table id="findings-table">
+  <thead>
+    <tr>
+      <th data-col="0">ID <span class="sort-arrow"></span></th>
+      <th data-col="1">Severity <span class="sort-arrow"></span></th>
+      <th data-col="2">Category <span class="sort-arrow"></span></th>
+      <th data-col="3">Title <span class="sort-arrow"></span></th>
+      <th data-col="4">Details</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for finding in report.findings %}
+    <tr>
+      <td>{{ finding.id[:12] }}</td>
+      <td><span class="badge badge-{{ finding.severity }}">{{ finding.severity }}</span></td>
+      <td>{{ finding.category }}</td>
+      <td>{{ finding.title }}</td>
+      <td>
+        <span class="detail-toggle" onclick="toggleDetail('detail-{{ loop.index }}')">show</span>
+        <div class="detail-section" id="detail-{{ loop.index }}">
+{{ finding.description }}
+{% if finding.registers %}
+Registers:
+{% for reg, val in finding.registers.items() %}  {{ reg }}: 0x{{ '%08x' % val }}
+{% endfor %}{% endif %}
+{% if finding.stack_trace %}
+Stack Trace:
+{% for addr in finding.stack_trace %}  0x{{ '%08x' % addr }}
+{% endfor %}{% endif %}
+{% if finding.cve %}CVE: {{ finding.cve }}{% endif %}
+{% if finding.exploit_module %}Module: {{ finding.exploit_module }}{% endif %}
+{% if finding.reproducer_path %}Reproducer: {{ finding.reproducer_path }}{% endif %}
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p style="text-align:center; color:var(--text-dim); padding:2rem;">No findings recorded.</p>
+{% endif %}
+
+<footer>
+  Generated by RTOSploit | Timestamp: {{ report.timestamp }}
+</footer>
+
+<script>
+function toggleDetail(id) {
+  var el = document.getElementById(id);
+  el.classList.toggle('open');
+  var toggle = el.previousElementSibling;
+  toggle.textContent = el.classList.contains('open') ? 'hide' : 'show';
+}
+
+(function() {
+  var table = document.getElementById('findings-table');
+  if (!table) return;
+  var headers = table.querySelectorAll('th[data-col]');
+  var sortState = {};
+
+  headers.forEach(function(th) {
+    th.addEventListener('click', function() {
+      var col = parseInt(th.getAttribute('data-col'));
+      var tbody = table.querySelector('tbody');
+      var rows = Array.from(tbody.querySelectorAll('tr'));
+      var asc = sortState[col] !== 'asc';
+      sortState[col] = asc ? 'asc' : 'desc';
+
+      var severityOrder = {critical: 0, high: 1, medium: 2, low: 3, info: 4};
+
+      rows.sort(function(a, b) {
+        var aText = a.children[col].textContent.trim().toLowerCase();
+        var bText = b.children[col].textContent.trim().toLowerCase();
+        if (col === 1) {
+          var aVal = severityOrder[aText] !== undefined ? severityOrder[aText] : 5;
+          var bVal = severityOrder[bText] !== undefined ? severityOrder[bText] : 5;
+          return asc ? aVal - bVal : bVal - aVal;
+        }
+        return asc ? aText.localeCompare(bText) : bText.localeCompare(aText);
+      });
+
+      rows.forEach(function(row) { tbody.appendChild(row); });
+
+      headers.forEach(function(h) {
+        h.querySelector('.sort-arrow').textContent = '';
+      });
+      th.querySelector('.sort-arrow').textContent = asc ? '\u25B2' : '\u25BC';
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

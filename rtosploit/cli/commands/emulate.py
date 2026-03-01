@@ -23,18 +23,6 @@ def emulate(ctx, firmware, machine, gdb, gdb_port, serial_port, svd):
     """
     output_json = ctx.obj.get("output_json", False)
 
-    try:
-        from rtosploit.emulation.machines import load_machine
-        machine_config = load_machine(machine)
-    except Exception:
-        from rtosploit.emulation.machines import MachineConfig
-        machine_config = MachineConfig(
-            name=machine,
-            qemu_machine=machine,
-            cpu="cortex-m3",
-            architecture="armv7m",
-        )
-
     result = {
         "firmware": firmware,
         "machine": machine,
@@ -57,23 +45,31 @@ def emulate(ctx, firmware, machine, gdb, gdb_port, serial_port, svd):
     if serial_port:
         console.print(f"  Serial:   [cyan]TCP localhost:{serial_port}[/cyan]")
 
-    # Build QEMU args
-    qemu_args = []
-    if gdb:
-        qemu_args.extend(["-gdb", f"tcp::{gdb_port}", "-S"])
-    if serial_port:
-        qemu_args.extend(["-serial", f"tcp::{serial_port},server,nowait"])
-
     console.print("\n[dim]Starting QEMU... (Ctrl+C to stop)[/dim]")
 
     try:
+        from rtosploit.config import load_config, RTOSploitConfig
         from rtosploit.emulation.qemu import QEMUInstance
-        instance = QEMUInstance(machine_config=machine_config, firmware=firmware, extra_args=qemu_args)
-        instance.start()
-        console.print(f"[green]QEMU running[/green] (PID: {instance.pid})")
+
+        # Load config and apply CLI overrides
+        config = load_config()
+        if gdb_port != 1234:
+            config.gdb.port = gdb_port
+
+        instance = QEMUInstance(config)
+        instance.start(
+            firmware_path=firmware,
+            machine_name=machine,
+            gdb=gdb,
+            paused=False,
+        )
+        pid = instance._process.pid if instance._process else "?"
+        console.print(f"[green]QEMU running[/green] (PID: {pid})")
 
         try:
-            instance.wait()
+            # Wait for QEMU process to exit
+            if instance._process:
+                instance._process.wait()
         except KeyboardInterrupt:
             console.print("\n[yellow]Stopping QEMU...[/yellow]")
             instance.stop()

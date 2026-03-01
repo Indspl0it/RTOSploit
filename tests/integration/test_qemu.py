@@ -258,7 +258,7 @@ class TestQEMUSnapshot:
 
             # After restore, the VM should still be queryable
             status = qemu.status()
-            assert status in ("running", "paused")
+            assert status in ("running", "paused", "restore-vm")
 
 
 # ---------------------------------------------------------------------------

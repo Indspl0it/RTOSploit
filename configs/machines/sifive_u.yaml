@@ -1,0 +1,48 @@
+machine:
+  name: sifive_u
+  qemu_machine: sifive_u
+  cpu: sifive-u54
+  architecture: riscv64
+
+memory:
+  ram:
+    base: 0x80000000
+    size: 0x200000000
+    permissions: rwx
+  peripherals:
+    base: 0x00000000
+    size: 0x80000000
+    permissions: rw
+
+peripherals:
+  uart0:
+    base: 0x10010000
+    size: 0x1000
+    irq: 4
+  uart1:
+    base: 0x10011000
+    size: 0x1000
+    irq: 5
+  plic:
+    base: 0x0C000000
+    size: 0x4000000
+    builtin: true
+  clint:
+    base: 0x02000000
+    size: 0x10000
+    builtin: true
+  prci:
+    base: 0x10000000
+    size: 0x1000
+  ethernet:
+    base: 0x10090000
+    size: 0x2000
+    irq: 53
+  spi0:
+    base: 0x10040000
+    size: 0x1000
+    irq: 51
+  gpio:
+    base: 0x10060000
+    size: 0x1000
+    irq: 7

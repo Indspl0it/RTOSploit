@@ -1,0 +1,61 @@
+machine:
+  name: lm3s6965evb
+  qemu_machine: lm3s6965evb
+  cpu: cortex-m3
+  architecture: armv7m
+
+memory:
+  flash:
+    base: 0x00000000
+    size: 0x00040000
+    permissions: rx
+  sram:
+    base: 0x20000000
+    size: 0x00010000
+    permissions: rwx
+  peripherals:
+    base: 0x40000000
+    size: 0x10000000
+    permissions: rw
+  system:
+    base: 0xE0000000
+    size: 0x00100000
+    permissions: rw
+
+peripherals:
+  uart0:
+    base: 0x4000C000
+    size: 0x1000
+    irq: 5
+  uart1:
+    base: 0x4000D000
+    size: 0x1000
+    irq: 6
+  uart2:
+    base: 0x4000E000
+    size: 0x1000
+    irq: 33
+  timer0:
+    base: 0x40030000
+    size: 0x1000
+    irq: 19
+  timer1:
+    base: 0x40031000
+    size: 0x1000
+    irq: 21
+  sysctl:
+    base: 0x400FE000
+    size: 0x1000
+    irq: 28
+  systick:
+    base: 0xE000E010
+    size: 0x10
+    builtin: true
+  nvic:
+    base: 0xE000E100
+    size: 0xC00
+    builtin: true
+  scb:
+    base: 0xE000ED00
+    size: 0x100
+    builtin: true

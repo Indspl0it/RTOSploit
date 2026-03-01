@@ -234,9 +234,87 @@ def _detect_rtems(firmware: FirmwareImage) -> tuple[float, Optional[str], list[s
     return confidence, version, evidence
 
 
+def _detect_espressif(firmware: FirmwareImage) -> tuple[float, Optional[str], list[str]]:
+    """Detect ESP-IDF (Espressif IoT Development Framework) by scanning for known strings.
+
+    ESP-IDF wraps FreeRTOS internally, so detection also notes the underlying RTOS.
+    """
+    markers = [
+        "ESP-IDF",
+        "esp_idf",
+        "IDF_VER",
+        "esp_err_t",
+        "esp_event",
+        "esp_wifi",
+        "esp_ble",
+        "DROM",
+        "IROM",
+        "rtc_fast",
+        "rtc_slow",
+        "esp_chip_info",
+        "CONFIG_IDF_TARGET",
+        "sdkconfig",
+        "menuconfig",
+        "abort() was called at PC",
+        "esp_ota",
+        "esp_flash",
+        "esp_partition",
+    ]
+
+    data = firmware.data
+    strings = _scan_strings(data)
+    full_text = " ".join(strings)
+
+    evidence: list[str] = []
+    hits = 0
+
+    for marker in markers:
+        if marker in full_text:
+            evidence.append(f"String found: '{marker}'")
+            hits += 1
+
+    # Check for ESP32 memory segment markers in raw binary
+    esp32_segments = [b"DROM", b"IROM", b"rtc_fast", b"rtc_slow"]
+    for seg in esp32_segments:
+        if seg in data and f"String found: '{seg.decode()}'" not in evidence:
+            evidence.append(f"Binary marker: {seg.decode()}")
+            hits += 1
+
+    # Version extraction
+    version = _extract_version_from_strings(
+        strings,
+        [
+            r"IDF_VER[:\s]*v?(\d+\.\d+[\.\d]*)",
+            r"ESP-IDF v?(\d+\.\d+[\.\d]*)",
+            r"v(\d+\.\d+\.\d+)[\-\s]",
+        ],
+    )
+    if version:
+        evidence.append(f"Version extracted: {version}")
+
+    # Note that ESP-IDF uses FreeRTOS internally
+    if hits > 0:
+        evidence.append("underlying_rtos: freertos (ESP-IDF wraps FreeRTOS)")
+
+    # Confidence: scale by how many strong markers found
+    if hits == 0:
+        confidence = 0.0
+    elif hits == 1:
+        confidence = 0.35
+    elif hits == 2:
+        confidence = 0.55
+    elif hits == 3:
+        confidence = 0.70
+    else:
+        confidence = min(0.95, 0.70 + (hits - 3) * 0.05)
+
+    return confidence, version, evidence
+
+
 def fingerprint_firmware(firmware: FirmwareImage) -> RTOSFingerprint:
     """Run all RTOS detectors and return the best match."""
     detectors = [
+        ("esp-idf", _detect_espressif),
         ("freertos", _detect_freertos),
         ("threadx", _detect_threadx),
         ("zephyr", _detect_zephyr),

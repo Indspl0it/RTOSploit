@@ -67,7 +67,20 @@ class SnapshotManager:
             pass  # Already paused is fine
 
         try:
-            qemu.qmp.execute("savevm", {"name": name})
+            # savevm is an HMP command — run it via QMP's human-monitor-command
+            result = qemu.qmp.execute(
+                "human-monitor-command",
+                {"command-line": f"savevm {name}"},
+            )
+            # human-monitor-command returns a string; non-empty means error
+            if isinstance(result, str) and result.strip():
+                raise OperationError(f"savevm error: {result.strip()}")
+        except OperationError:
+            try:
+                qemu.resume()
+            except Exception:
+                pass
+            raise
         except Exception as e:
             # Resume before re-raising
             try:
@@ -101,7 +114,14 @@ class SnapshotManager:
             OperationError: If the snapshot doesn't exist or load fails.
         """
         try:
-            qemu.qmp.execute("loadvm", {"name": name})
+            result = qemu.qmp.execute(
+                "human-monitor-command",
+                {"command-line": f"loadvm {name}"},
+            )
+            if isinstance(result, str) and result.strip():
+                raise OperationError(f"loadvm error: {result.strip()}")
+        except OperationError:
+            raise
         except Exception as e:
             raise OperationError(f"Failed to load snapshot '{name}': {e}") from e
 
@@ -139,7 +159,14 @@ class SnapshotManager:
             name: Name of the snapshot to delete.
         """
         try:
-            qemu.qmp.execute("delvm", {"name": name})
+            result = qemu.qmp.execute(
+                "human-monitor-command",
+                {"command-line": f"delvm {name}"},
+            )
+            if isinstance(result, str) and result.strip():
+                raise OperationError(f"delvm error: {result.strip()}")
+        except OperationError:
+            raise
         except Exception as e:
             raise OperationError(f"Failed to delete snapshot '{name}': {e}") from e
 
@@ -157,9 +184,16 @@ class SnapshotManager:
             qemu: Running QEMUInstance.
             snapshot_name: Name of the snapshot to restore.
         """
-        # Send loadvm — this implicitly stops the VM
+        # Send loadvm via HMP — this implicitly stops the VM
         try:
-            qemu.qmp.execute("loadvm", {"name": snapshot_name})
+            result = qemu.qmp.execute(
+                "human-monitor-command",
+                {"command-line": f"loadvm {snapshot_name}"},
+            )
+            if isinstance(result, str) and result.strip():
+                raise OperationError(f"loadvm error: {result.strip()}")
+        except OperationError:
+            raise
         except Exception as e:
             raise OperationError(
                 f"fast_reset: failed to load snapshot '{snapshot_name}': {e}"
