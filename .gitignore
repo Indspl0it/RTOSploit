@@ -43,3 +43,4 @@ Thumbs.db
 
 # Logs
 *.log
+uv.lock

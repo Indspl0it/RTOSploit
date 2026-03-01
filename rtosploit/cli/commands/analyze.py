@@ -43,6 +43,12 @@ def analyze(ctx, firmware, detect_rtos, detect_heap, detect_mpu, strings, run_al
                 "detected": rtos_result.rtos_type,
                 "version": rtos_result.version,
                 "confidence": rtos_result.confidence,
+                "architecture": rtos_result.architecture,
+                "mcu_family": rtos_result.mcu_family,
+                "symbol_count": rtos_result.symbol_count,
+                "input_interfaces": rtos_result.input_interfaces,
+                "memory_map": rtos_result.memory_map,
+                "vector_table": {k: f"0x{v:08x}" for k, v in rtos_result.vector_table.items()},
             }
         except Exception as e:
             results["rtos"] = {"error": str(e)}
@@ -106,6 +112,16 @@ def analyze(ctx, firmware, detect_rtos, detect_heap, detect_mpu, strings, run_al
             ver_str = f" v{r['version']}" if r.get("version") else ""
             conf_str = f" ({r['confidence']:.0%})" if r.get("confidence") else ""
             console.print(f"  RTOS:   [green]{rtos_str}{ver_str}{conf_str}[/green]")
+            arch = r.get("architecture", "unknown")
+            mcu = r.get("mcu_family", "unknown")
+            sym_count = r.get("symbol_count", 0)
+            console.print(f"  Arch:   [cyan]{arch}[/cyan]")
+            console.print(f"  MCU:    [cyan]{mcu}[/cyan]")
+            if sym_count:
+                console.print(f"  Symbols: [cyan]{sym_count}[/cyan]")
+            ifaces = r.get("input_interfaces", [])
+            if ifaces:
+                console.print(f"  Interfaces: [cyan]{', '.join(ifaces)}[/cyan]")
         else:
             console.print(f"  RTOS:   [yellow]detection error: {r['error']}[/yellow]")
 

@@ -10,9 +10,6 @@ from rtosploit.utils.binary import FirmwareImage, BinaryFormat
 from rtosploit.analysis.fingerprint import (
     RTOSFingerprint,
     fingerprint_firmware,
-    _detect_freertos,
-    _detect_threadx,
-    _detect_zephyr,
 )
 from rtosploit.analysis.heap_detect import HeapInfo, detect_heap
 from rtosploit.analysis.mpu_check import (
