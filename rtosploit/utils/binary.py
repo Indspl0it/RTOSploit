@@ -28,6 +28,15 @@ class MemorySection:
 
 
 @dataclass
+class RelocationEntry:
+    """An ELF relocation entry."""
+    offset: int
+    symbol_name: str
+    type: int
+    addend: int = 0
+
+
+@dataclass
 class FirmwareImage:
     """Loaded firmware image with metadata."""
     data: bytes
@@ -36,6 +45,7 @@ class FirmwareImage:
     format: BinaryFormat
     sections: list[MemorySection] = field(default_factory=list)
     symbols: dict[str, int] = field(default_factory=dict)
+    relocations: list[RelocationEntry] = field(default_factory=list)
     path: Path = field(default_factory=lambda: Path("."))
     architecture: str = "unknown"  # "armv7m" | "armv8m" | "riscv32" | "unknown"
 
@@ -240,6 +250,30 @@ def load_elf(path: Path) -> FirmwareImage:
                 if sym.name and sym["st_value"] != 0:
                     symbols[sym.name] = sym["st_value"]
 
+        # Extract relocations
+        relocations: list[RelocationEntry] = []
+        for section in elf.iter_sections():
+            sh_type = section.header.sh_type
+            if sh_type not in ("SHT_REL", "SHT_RELA"):
+                continue
+            # Get the linked symbol table
+            symtab_idx = section.header.sh_link
+            linked_symtab = elf.get_section(symtab_idx)
+            if linked_symtab is None:
+                continue
+            is_rela = sh_type == "SHT_RELA"
+            for rel in section.iter_relocations():
+                sym_idx = rel["r_info_sym"]
+                sym = linked_symtab.get_symbol(sym_idx)
+                sym_name = sym.name if sym else ""
+                addend = rel["r_addend"] if is_rela else 0
+                relocations.append(RelocationEntry(
+                    offset=rel["r_offset"],
+                    symbol_name=sym_name,
+                    type=rel["r_info_type"],
+                    addend=addend,
+                ))
+
         # Detect architecture
         architecture = _detect_elf_architecture(elf)
 
@@ -268,6 +302,7 @@ def load_elf(path: Path) -> FirmwareImage:
         format=BinaryFormat.ELF,
         sections=sections,
         symbols=symbols,
+        relocations=relocations,
         path=path,
         architecture=architecture,
     )
