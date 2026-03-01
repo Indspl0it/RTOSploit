@@ -12,9 +12,10 @@ console = Console()
 @click.option("--detect-heap", is_flag=True, default=False, help="Detect heap allocator")
 @click.option("--detect-mpu", is_flag=True, default=False, help="Detect MPU configuration")
 @click.option("--strings", is_flag=True, default=False, help="Extract and classify strings")
+@click.option("--detect-peripherals", "detect_periphs", is_flag=True, default=False, help="Detect peripheral usage")
 @click.option("--all", "run_all", is_flag=True, default=False, help="Run all analyses")
 @click.pass_context
-def analyze(ctx, firmware, detect_rtos, detect_heap, detect_mpu, strings, run_all):
+def analyze(ctx, firmware, detect_rtos, detect_heap, detect_mpu, strings, detect_periphs, run_all):
     """Run static analysis on a firmware binary.
 
     \b
@@ -23,10 +24,10 @@ def analyze(ctx, firmware, detect_rtos, detect_heap, detect_mpu, strings, run_al
       rtosploit analyze --firmware fw.bin --detect-rtos --detect-mpu
     """
     if run_all:
-        detect_rtos = detect_heap = detect_mpu = strings = True
+        detect_rtos = detect_heap = detect_mpu = strings = detect_periphs = True
 
-    if not any([detect_rtos, detect_heap, detect_mpu, strings]):
-        detect_rtos = detect_heap = detect_mpu = strings = True
+    if not any([detect_rtos, detect_heap, detect_mpu, strings, detect_periphs]):
+        detect_rtos = detect_heap = detect_mpu = strings = detect_periphs = True
 
     output_json = ctx.obj.get("output_json", False)
     results = {"firmware": firmware}
@@ -94,6 +95,14 @@ def analyze(ctx, firmware, detect_rtos, detect_heap, detect_mpu, strings, run_al
         except Exception as e:
             results["strings"] = {"error": str(e)}
 
+    if detect_periphs:
+        try:
+            from rtosploit.analysis.detection import detect_peripherals as run_detection
+            det_result = run_detection(fw_image)
+            results["peripherals"] = det_result.to_dict()
+        except Exception as e:
+            results["peripherals"] = {"error": str(e)}
+
     if output_json:
         import json
         click.echo(json.dumps(results, indent=2))
@@ -148,3 +157,30 @@ def analyze(ctx, firmware, detect_rtos, detect_heap, detect_mpu, strings, run_al
             console.print(f"  Strings: [green]{r['count']} found[/green]")
         else:
             console.print("  Strings: [yellow]extraction error[/yellow]")
+
+    if "peripherals" in results:
+        r = results["peripherals"]
+        if "error" not in r:
+            periph_data = r.get("peripherals", {})
+            if periph_data:
+                table = Table(title="Detected Peripherals")
+                table.add_column("Peripheral", style="cyan")
+                table.add_column("Type", style="green")
+                table.add_column("Confidence", justify="right")
+                table.add_column("Level", style="bold")
+                table.add_column("Evidence", justify="right")
+                for name, info in periph_data.items():
+                    level = info.get("confidence_level", "?")
+                    level_style = {"high": "[green]", "medium": "[yellow]", "low": "[red]"}.get(level, "")
+                    table.add_row(
+                        name,
+                        info.get("type", "?"),
+                        f"{info.get('confidence', 0):.2f}",
+                        f"{level_style}{level}[/]" if level_style else level,
+                        str(info.get("evidence_count", 0)),
+                    )
+                console.print(table)
+            else:
+                console.print("  Peripherals: [yellow]none detected[/yellow]")
+        else:
+            console.print(f"  Peripherals: [yellow]detection error: {r['error']}[/yellow]")

@@ -44,3 +44,4 @@ Thumbs.db
 # Logs
 *.log
 uv.lock
+test-firmware/
