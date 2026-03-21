@@ -58,16 +58,45 @@ class CrashReporter:
 
         return json_path
 
+    # Maximum byte distance between two PCs to consider them "nearby" —
+    # crashes in the same function but at different call depths often land
+    # within a small offset of each other.
+    PC_PROXIMITY_THRESHOLD = 64
+
     @staticmethod
     def deduplicate(crash_data: dict, existing_crashes: list[dict]) -> bool:
-        """Returns True if crash is unique (different PC or different CFSR flags)."""
+        """Returns True if crash is unique.
+
+        A crash is considered duplicate if ANY of the following match an
+        existing crash:
+        1. Exact PC **and** exact CFSR (original fast-path).
+        2. Nearby PC (within ``PC_PROXIMITY_THRESHOLD`` bytes) **and** exact
+           CFSR — catches the same fault at slightly different call depths.
+        3. Matching top-3 backtrace frames (when both crashes carry a
+           ``backtrace`` list with at least one entry).
+        """
         pc = crash_data.get("registers", {}).get("pc", 0)
         cfsr = crash_data.get("cfsr", 0)
+        backtrace = crash_data.get("backtrace", [])
+        top_frames = backtrace[:3] if backtrace else []
 
         for existing in existing_crashes:
             existing_pc = existing.get("registers", {}).get("pc", 0)
             existing_cfsr = existing.get("cfsr", 0)
+
+            # 1. Exact PC + CFSR (fast path)
             if pc == existing_pc and cfsr == existing_cfsr:
-                return False  # duplicate
+                return False
+
+            # 2. Nearby PC + same CFSR
+            if cfsr == existing_cfsr and abs(pc - existing_pc) <= CrashReporter.PC_PROXIMITY_THRESHOLD:
+                return False
+
+            # 3. Stack-trace dedup: top 3 frames match
+            if top_frames:
+                existing_bt = existing.get("backtrace", [])
+                existing_top = existing_bt[:3] if existing_bt else []
+                if existing_top and top_frames == existing_top:
+                    return False
 
         return True  # unique

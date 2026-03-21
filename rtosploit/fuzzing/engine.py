@@ -189,9 +189,9 @@ class FuzzWorker:
                     gdb.send_break()
                     gdb.receive_stop(timeout=2.0)
                     # Restore saved register state
-                    for i, (name, val) in enumerate(saved_registers.items()):
+                    for name, val in saved_registers.items():
                         try:
-                            gdb.write_register(i, val)
+                            gdb.write_register(name, val)
                         except Exception:
                             pass
                 else:

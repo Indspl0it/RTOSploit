@@ -7,6 +7,7 @@ locally for offline use. Maps MCU family shortnames to specific SVD files.
 from __future__ import annotations
 
 import logging
+import os
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -16,8 +17,13 @@ from rtosploit.peripherals.svd_model import SVDDevice
 
 logger = logging.getLogger(__name__)
 
-# Base URL for CMSIS-SVD data repository (matches cli/commands/svd.py)
-_SVD_BASE_URL = "https://raw.githubusercontent.com/cmsis-svd/cmsis-svd-data/main/"
+# Base URLs for CMSIS-SVD data repository, tried in order (first success wins).
+# The upstream repo has moved/restructured several times; fallbacks prevent 404s.
+_SVD_BASE_URLS = [
+    "https://raw.githubusercontent.com/cmsis-svd/cmsis-svd-data/main/data/",
+    "https://raw.githubusercontent.com/cmsis-svd/cmsis-svd-data/main/",
+    "https://raw.githubusercontent.com/posborne/cmsis-svd/master/data/",
+]
 
 # MCU family shortname -> (vendor_folder, svd_filename)
 _MCU_SVD_MAP: dict[str, tuple[str, str]] = {
@@ -33,8 +39,12 @@ _MCU_SVD_MAP: dict[str, tuple[str, str]] = {
     "esp32": ("Espressif", "ESP32.svd"),
 }
 
-# Default cache directory
-_DEFAULT_CACHE_DIR = Path.home() / ".cache" / "rtosploit" / "svd"
+# Default cache directory — respects $XDG_CACHE_HOME
+_DEFAULT_CACHE_DIR = (
+    Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
+    / "rtosploit"
+    / "svd"
+)
 
 
 class SVDCache:
@@ -70,24 +80,29 @@ class SVDCache:
         if cached_path.exists():
             return cached_path
 
-        # Download
-        url = f"{_SVD_BASE_URL}{vendor}/{filename}"
-        logger.info("Downloading SVD: %s", url)
+        # Download — try each base URL in order until one succeeds
+        cached_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path = cached_path.with_suffix(".tmp")
 
-        try:
-            cached_path.parent.mkdir(parents=True, exist_ok=True)
-            # Download to temp file then rename for atomicity
-            tmp_path = cached_path.with_suffix(".tmp")
-            urllib.request.urlretrieve(url, str(tmp_path))
-            tmp_path.rename(cached_path)
-            return cached_path
-        except (urllib.error.HTTPError, urllib.error.URLError, OSError) as e:
-            logger.error("Failed to download SVD from %s: %s", url, e)
-            # Clean up partial downloads
-            tmp_path = cached_path.with_suffix(".tmp")
-            if tmp_path.exists():
-                tmp_path.unlink()
-            return None
+        for base_url in _SVD_BASE_URLS:
+            url = f"{base_url}{vendor}/{filename}"
+            logger.info("Trying SVD URL: %s", url)
+
+            try:
+                urllib.request.urlretrieve(url, str(tmp_path))
+                tmp_path.rename(cached_path)
+                logger.info("Downloaded SVD from %s", url)
+                return cached_path
+            except (urllib.error.HTTPError, urllib.error.URLError, OSError) as e:
+                logger.debug("URL failed: %s — %s", url, e)
+                # Clean up partial download before trying next URL
+                if tmp_path.exists():
+                    tmp_path.unlink()
+
+        logger.error(
+            "Failed to download SVD %s/%s from all URLs", vendor, filename
+        )
+        return None
 
     def get_svd_device(self, mcu_family: str) -> Optional[SVDDevice]:
         """Get parsed SVDDevice, downloading SVD if needed.

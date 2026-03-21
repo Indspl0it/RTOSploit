@@ -6,6 +6,7 @@ import os
 import shutil
 import signal
 import subprocess
+import tempfile
 import time
 import uuid
 from pathlib import Path
@@ -31,6 +32,7 @@ class QEMUInstance:
     def __init__(self, config: RTOSploitConfig) -> None:
         self._config = config
         self._process: Optional[subprocess.Popen] = None  # type: ignore[type-arg]
+        self._qmp_tmp_dir: Optional[str] = None
         self._qmp_socket_path: Optional[str] = None
         self.qmp = QMPClient()
         self.gdb: Optional[Any] = None  # GDBClient, imported lazily
@@ -222,8 +224,9 @@ class QEMUInstance:
         machine = load_machine(machine_name)
         self._machine = machine
 
-        # Generate unique QMP socket path
-        self._qmp_socket_path = f"/tmp/rtosploit-qmp-{uuid.uuid4().hex}.sock"
+        # Generate unique QMP socket path inside a secure temp directory
+        self._qmp_tmp_dir = tempfile.mkdtemp(prefix="rtosploit-")
+        self._qmp_socket_path = os.path.join(self._qmp_tmp_dir, "qmp.sock")
 
         cmd = self._build_command_line(
             machine, firmware_path, gdb=gdb, paused=paused, extra_args=extra_qemu_args
@@ -293,13 +296,11 @@ class QEMUInstance:
                     pass
             self._process = None
 
-        # Clean up socket
-        if self._qmp_socket_path:
-            try:
-                os.unlink(self._qmp_socket_path)
-            except FileNotFoundError:
-                pass
-            self._qmp_socket_path = None
+        # Clean up temporary directory (contains QMP socket)
+        if self._qmp_tmp_dir and os.path.exists(self._qmp_tmp_dir):
+            shutil.rmtree(self._qmp_tmp_dir, ignore_errors=True)
+            self._qmp_tmp_dir = None
+        self._qmp_socket_path = None
 
     def reset(self) -> None:
         """Reset the emulated system via QMP system_reset."""

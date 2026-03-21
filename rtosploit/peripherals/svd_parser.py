@@ -26,15 +26,34 @@ from rtosploit.peripherals.svd_model import (
 )
 
 
+class SVDParseError(Exception):
+    """Raised when SVD XML cannot be parsed."""
+
+
 def parse_svd(path: Path) -> SVDDevice:
-    """Parse an SVD XML file into an SVDDevice."""
-    tree = ET.parse(path)
+    """Parse an SVD XML file into an SVDDevice.
+
+    Raises:
+        SVDParseError: If the file contains malformed XML or is otherwise
+            unparseable.
+    """
+    try:
+        tree = ET.parse(path)
+    except ET.ParseError as exc:
+        raise SVDParseError(f"Malformed SVD XML in {path}: {exc}") from exc
     return _parse_root(tree.getroot())
 
 
 def parse_svd_string(xml_content: str) -> SVDDevice:
-    """Parse SVD XML from a string (for testing)."""
-    root = ET.fromstring(xml_content)
+    """Parse SVD XML from a string (for testing).
+
+    Raises:
+        SVDParseError: If the XML is malformed.
+    """
+    try:
+        root = ET.fromstring(xml_content)
+    except ET.ParseError as exc:
+        raise SVDParseError(f"Malformed SVD XML: {exc}") from exc
     return _parse_root(root)
 
 
@@ -165,7 +184,9 @@ def _parse_register(
 ) -> list[SVDRegister]:
     """Parse a single <register>, expanding dim arrays if present."""
     raw_name = _text(el, "name", "?")
-    offset = _int_text(el, "addressOffset", 0)
+    offset = _int_text(el, "addressOffset", None)
+    if offset is None or offset < 0:
+        offset = 0
     size = _int_text(el, "size", 32)
     reset_value = _int_text(el, "resetValue", 0)
     access = _text(el, "access", "read-write")
@@ -287,11 +308,17 @@ def _int_text(
 
 
 def _parse_int(text: str) -> int:
-    """Parse an integer from SVD text (hex 0x, binary #, or decimal)."""
+    """Parse an integer from SVD text (hex 0x, binary #, or decimal).
+
+    Returns 0 for values that cannot be parsed, rather than crashing.
+    """
     text = text.strip()
-    if text.startswith("0x") or text.startswith("0X"):
-        return int(text, 16)
-    if text.startswith("#"):
-        # Binary format used in some SVDs
-        return int(text[1:], 2)
-    return int(text, 0)
+    try:
+        if text.startswith("0x") or text.startswith("0X"):
+            return int(text, 16)
+        if text.startswith("#"):
+            # Binary format used in some SVDs
+            return int(text[1:], 2)
+        return int(text, 0)
+    except (ValueError, IndexError):
+        return 0

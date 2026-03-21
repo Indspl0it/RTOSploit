@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+import urllib.error
 import urllib.request
 import urllib.parse
 from typing import Optional
@@ -36,17 +37,55 @@ class NVDClient:
         if elapsed < self._min_interval:
             time.sleep(self._min_interval - elapsed)
 
+    _MAX_RETRIES = 3
+
     def _request(self, url: str) -> dict:
-        """Make a rate-limited GET request to the NVD API."""
+        """Make a rate-limited GET request to the NVD API.
+
+        Retries on HTTP 429 (with exponential backoff) and transient 5xx errors.
+        """
         self._rate_limit()
         req = urllib.request.Request(url)
         req.add_header("User-Agent", "RTOSploit-CVECorrelator/1.0")
         if self._api_key:
             req.add_header("apiKey", self._api_key)
-        logger.debug("NVD request: %s", url)
-        self._last_request_time = time.time()
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+
+        last_exc: Exception | None = None
+        for attempt in range(self._MAX_RETRIES):
+            logger.debug("NVD request (attempt %d): %s", attempt + 1, url)
+            self._last_request_time = time.time()
+            try:
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    return json.loads(resp.read().decode("utf-8"))
+            except urllib.error.HTTPError as exc:
+                last_exc = exc
+                if exc.code == 429:
+                    # Too Many Requests — honour Retry-After or exponential backoff
+                    retry_after = exc.headers.get("Retry-After") if exc.headers else None
+                    if retry_after is not None:
+                        try:
+                            delay = float(retry_after)
+                        except (ValueError, TypeError):
+                            delay = 2.0 ** (attempt + 1)
+                    else:
+                        delay = 2.0 ** (attempt + 1)  # 2s, 4s, 8s
+                    logger.warning(
+                        "NVD 429 Too Many Requests, retrying in %.1fs", delay
+                    )
+                    time.sleep(delay)
+                    continue
+                if exc.code in (500, 502, 503) and attempt == 0:
+                    # Transient server error — retry once with 2s delay
+                    logger.warning(
+                        "NVD server error %d, retrying in 2s", exc.code
+                    )
+                    time.sleep(2.0)
+                    continue
+                # Non-retryable 4xx or exhausted server-error retry — raise
+                raise
+
+        # Exhausted all retries (only reachable for 429 loops)
+        raise last_exc  # type: ignore[misc]
 
     @staticmethod
     def _parse_nvd_item(item: dict) -> CVEEntry:
