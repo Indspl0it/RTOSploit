@@ -1,6 +1,16 @@
-# RTOSploit
+<p align="center">
+  <img src="assets/banner.svg" alt="RTOSploit — RTOS Exploitation & Bare-Metal Fuzzing Framework" width="100%"/>
+</p>
 
-**RTOS Exploitation & Bare-Metal Fuzzing Framework**
+<p align="center">
+  <a href="#4-installation"><img src="https://img.shields.io/badge/python-3.10%2B-blue?logo=python&logoColor=white" alt="Python 3.10+"/></a>
+  <img src="https://img.shields.io/badge/tests-1370%2B%20passing-brightgreen" alt="Tests"/>
+  <img src="https://img.shields.io/badge/license-GPL--3.0-orange" alt="License"/>
+  <img src="https://img.shields.io/badge/QEMU-9.0%2B-informational?logo=qemu" alt="QEMU"/>
+  <img src="https://img.shields.io/badge/exploits-15%20modules-red" alt="Exploits"/>
+</p>
+
+---
 
 RTOSploit is a security testing framework purpose-built for embedded RTOS firmware. It combines grey-box fuzzing, static analysis, vulnerability assessment, CVE correlation, peripheral auto-rehosting, and automated reporting — all running entirely in software via QEMU emulation. No physical hardware required.
 

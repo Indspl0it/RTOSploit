@@ -44,4 +44,18 @@ Thumbs.db
 # Logs
 *.log
 uv.lock
+
+# Test firmware (large binaries, not redistributable)
 test-firmware/
+
+# Claude / AI development artifacts
+.claude/
+thoughts/
+specifications.md
+implementation-plan.md
+docs/implementation-plan-v2.md
+
+# Runtime output
+results/
+fuzz-output/
+scan-output/
