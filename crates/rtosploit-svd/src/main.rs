@@ -45,7 +45,7 @@ fn main() -> Result<()> {
 
     let device = parse_svd(&args.svd)?;
     let mcu_name = args.name.unwrap_or_else(|| device.name.clone());
-    let mode = StubMode::from_str(&args.mode);
+    let mode = StubMode::parse(&args.mode);
 
     println!(
         "Device: {} ({} peripherals)",
@@ -75,7 +75,7 @@ fn main() -> Result<()> {
         &peripherals
     };
 
-    let output_dir = args.output.join(&mcu_name.to_lowercase());
+    let output_dir = args.output.join(mcu_name.to_lowercase());
     std::fs::create_dir_all(&output_dir)?;
 
     let stubs = generate_all_stubs(to_generate, &mcu_name, mode);

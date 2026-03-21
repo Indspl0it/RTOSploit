@@ -58,7 +58,7 @@ pub fn peripheral_priority(name: &str) -> Priority {
 }
 
 /// Return peripherals sorted by priority (critical first).
-pub fn sort_by_priority<T, F>(items: &mut Vec<T>, name_fn: F)
+pub fn sort_by_priority<T, F>(items: &mut [T], name_fn: F)
 where
     F: Fn(&T) -> &str,
 {

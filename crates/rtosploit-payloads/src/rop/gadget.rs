@@ -72,8 +72,8 @@ fn classify(body: &[u8]) -> GadgetType {
             return GadgetType::MemoryRead;
         }
 
-        // ADD / SUB: 0001 1 / 0001 1 → 0x18-0x1F or 0x30-0x3F
-        if (hi & 0xFC == 0x18) || (hi & 0xC0 == 0x30) {
+        // ADD / SUB: 0001 1 → 0x18-0x1F or 0011 0 → 0x30-0x3F
+        if ((hi & 0xFC) == 0x18) || ((hi & 0xF0) == 0x30) {
             return GadgetType::Arithmetic;
         }
 
@@ -115,7 +115,7 @@ pub fn find_gadgets(binary: &[u8], load_address: u32, bad_chars: &[u8]) -> Vec<G
 
             if !addr_contains_bad(gadget_addr, bad_chars) {
                 // Look back up to 16 bytes (8 instructions) for the gadget body.
-                let start = if offset >= 16 { offset - 16 } else { 0 };
+                let start = offset.saturating_sub(16);
                 // Align start to 2-byte boundary.
                 let start = start & !1;
 
@@ -145,7 +145,7 @@ pub fn find_gadgets(binary: &[u8], load_address: u32, bad_chars: &[u8]) -> Vec<G
             let gadget_addr = load_address.wrapping_add(offset as u32);
 
             if !addr_contains_bad(gadget_addr, bad_chars) {
-                let start = if offset >= 16 { offset - 16 } else { 0 };
+                let start = offset.saturating_sub(16);
                 let start = start & !1;
 
                 let body = &binary[start..offset];

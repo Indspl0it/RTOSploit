@@ -24,6 +24,7 @@ const INTERESTING_U32: &[[u8; 4]] = &[
 
 // ── Mutator 1: BitFlipMutator ─────────────────────────────────────────────────
 
+#[derive(Default)]
 pub struct BitFlipMutator;
 
 impl BitFlipMutator {
@@ -32,7 +33,7 @@ impl BitFlipMutator {
     }
 
     /// Flip 1, 2, or 4 bits at a random position.
-    pub fn mutate(&self, input: &mut Vec<u8>, _max_size: usize, rng: &mut impl Rng) {
+    pub fn mutate(&self, input: &mut [u8], _max_size: usize, rng: &mut impl Rng) {
         if input.is_empty() {
             return;
         }
@@ -47,6 +48,7 @@ impl BitFlipMutator {
 
 // ── Mutator 2: ByteFlipMutator ────────────────────────────────────────────────
 
+#[derive(Default)]
 pub struct ByteFlipMutator;
 
 impl ByteFlipMutator {
@@ -55,7 +57,7 @@ impl ByteFlipMutator {
     }
 
     /// Flip 1, 2, or 4 bytes (XOR 0xFF) at a random position.
-    pub fn mutate(&self, input: &mut Vec<u8>, _max_size: usize, rng: &mut impl Rng) {
+    pub fn mutate(&self, input: &mut [u8], _max_size: usize, rng: &mut impl Rng) {
         if input.is_empty() {
             return;
         }
@@ -70,6 +72,7 @@ impl ByteFlipMutator {
 
 // ── Mutator 3: ArithmeticMutator ──────────────────────────────────────────────
 
+#[derive(Default)]
 pub struct ArithmeticMutator;
 
 impl ArithmeticMutator {
@@ -78,7 +81,7 @@ impl ArithmeticMutator {
     }
 
     /// Add or subtract 1-35 to a random u16 or u32 at a random byte offset (LE).
-    pub fn mutate(&self, input: &mut Vec<u8>, _max_size: usize, rng: &mut impl Rng) {
+    pub fn mutate(&self, input: &mut [u8], _max_size: usize, rng: &mut impl Rng) {
         if input.len() < 2 {
             return;
         }
@@ -112,6 +115,7 @@ impl ArithmeticMutator {
 
 // ── Mutator 4: InterestingValueMutator ───────────────────────────────────────
 
+#[derive(Default)]
 pub struct InterestingValueMutator;
 
 impl InterestingValueMutator {
@@ -120,7 +124,7 @@ impl InterestingValueMutator {
     }
 
     /// Replace bytes at a random offset with an interesting boundary value.
-    pub fn mutate(&self, input: &mut Vec<u8>, _max_size: usize, rng: &mut impl Rng) {
+    pub fn mutate(&self, input: &mut [u8], _max_size: usize, rng: &mut impl Rng) {
         if input.is_empty() {
             return;
         }
@@ -159,6 +163,7 @@ impl InterestingValueMutator {
 
 // ── Mutator 5: BlockInsertMutator ─────────────────────────────────────────────
 
+#[derive(Default)]
 pub struct BlockInsertMutator;
 
 impl BlockInsertMutator {
@@ -185,6 +190,7 @@ impl BlockInsertMutator {
 
 // ── Mutator 6: BlockDeleteMutator ─────────────────────────────────────────────
 
+#[derive(Default)]
 pub struct BlockDeleteMutator;
 
 impl BlockDeleteMutator {
@@ -206,6 +212,7 @@ impl BlockDeleteMutator {
 
 // ── Mutator 7: SpliceMutator ──────────────────────────────────────────────────
 
+#[derive(Default)]
 pub struct SpliceMutator;
 
 impl SpliceMutator {
@@ -493,8 +500,8 @@ mod tests {
         // Only indices 0 and 1 should be selected
         assert!(counts[0] > 0);
         assert!(counts[1] > 0);
-        for i in 2..8 {
-            assert_eq!(counts[i], 0, "Index {} should not be selected", i);
+        for (i, &count) in counts.iter().enumerate().skip(2) {
+            assert_eq!(count, 0, "Index {} should not be selected", i);
         }
     }
 }

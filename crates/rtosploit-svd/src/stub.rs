@@ -18,7 +18,7 @@ pub enum StubMode {
 }
 
 impl StubMode {
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse(s: &str) -> Self {
         match s.trim().to_lowercase().as_str() {
             "reset-value" | "reset_value" | "resetvalue" => StubMode::ResetValue,
             "read-write" | "read_write" | "readwrite" => StubMode::ReadWrite,
@@ -425,10 +425,10 @@ mod tests {
 
     #[test]
     fn test_stub_mode_from_str() {
-        assert_eq!(StubMode::from_str("reset-value"), StubMode::ResetValue);
-        assert_eq!(StubMode::from_str("read-write"), StubMode::ReadWrite);
-        assert_eq!(StubMode::from_str("fuzzer-driven"), StubMode::FuzzerDriven);
-        assert_eq!(StubMode::from_str("invalid"), StubMode::ResetValue); // default
+        assert_eq!(StubMode::parse("reset-value"), StubMode::ResetValue);
+        assert_eq!(StubMode::parse("read-write"), StubMode::ReadWrite);
+        assert_eq!(StubMode::parse("fuzzer-driven"), StubMode::FuzzerDriven);
+        assert_eq!(StubMode::parse("invalid"), StubMode::ResetValue); // default
     }
 
     #[test]

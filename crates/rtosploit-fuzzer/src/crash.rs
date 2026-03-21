@@ -142,7 +142,7 @@ impl CrashDetector {
 /// Layer 1/2: Patch fault vectors to trap address.
 /// Returns (offset, original_value) pairs for patched entries.
 pub fn patch_vector_table(
-    firmware: &mut Vec<u8>,
+    firmware: &mut [u8],
     hardfault: bool,
     busfault: bool,
     memmanage: bool,
@@ -155,12 +155,7 @@ pub fn patch_vector_table(
 
     let mut patches: Vec<(usize, u32)> = Vec::new();
 
-    fn patch_entry(
-        firmware: &mut Vec<u8>,
-        offset: usize,
-        trap: u32,
-        patches: &mut Vec<(usize, u32)>,
-    ) {
+    fn patch_entry(firmware: &mut [u8], offset: usize, trap: u32, patches: &mut Vec<(usize, u32)>) {
         if offset + 4 <= firmware.len() {
             let orig = u32::from_le_bytes([
                 firmware[offset],

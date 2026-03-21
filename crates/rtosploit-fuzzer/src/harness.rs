@@ -181,13 +181,13 @@ impl FuzzHarness for QemuHarness {
             let _ = input;
             let elapsed = start.elapsed().as_millis() as u64;
             log::debug!("QemuHarness: qemu feature not enabled, returning stub timeout");
-            return Ok(HarnessExecutionResult {
+            Ok(HarnessExecutionResult {
                 exit_code: ExitCode::Timeout,
                 coverage_bitmap: Vec::new(),
                 execution_time_ms: elapsed,
                 stdout: String::new(),
                 stderr: "QEMU feature not enabled".to_string(),
-            });
+            })
         }
 
         #[cfg(feature = "qemu")]

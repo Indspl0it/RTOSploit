@@ -9,24 +9,19 @@ use std::collections::HashMap;
 use std::path::Path;
 
 /// Access type for a register or field.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Access {
     ReadOnly,
     WriteOnly,
+    #[default]
     ReadWrite,
     WriteOnce,
     ReadWriteOnce,
 }
 
-impl Default for Access {
-    fn default() -> Self {
-        Access::ReadWrite
-    }
-}
-
 impl Access {
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse(s: &str) -> Self {
         match s.trim() {
             "read-only" => Access::ReadOnly,
             "write-only" => Access::WriteOnly,
@@ -84,7 +79,7 @@ pub struct Register {
 impl Register {
     /// Byte size of this register (size / 8).
     pub fn byte_size(&self) -> u64 {
-        (self.size as u64 + 7) / 8
+        (self.size as u64).div_ceil(8)
     }
 }
 
@@ -379,7 +374,7 @@ fn parse_register(reader: &mut Reader<&[u8]>) -> Result<Register> {
                     }
                     "access" => {
                         let s = read_text(reader, &mut buf)?;
-                        access = Access::from_str(&s);
+                        access = Access::parse(&s);
                     }
                     "fields" => {
                         fields = parse_fields(reader)?;
@@ -476,7 +471,7 @@ fn parse_field(reader: &mut Reader<&[u8]>) -> Result<Field> {
                     }
                     "access" => {
                         let s = read_text(reader, &mut buf)?;
-                        access = Some(Access::from_str(&s));
+                        access = Some(Access::parse(&s));
                     }
                     other => {
                         let tag_bytes = other.as_bytes().to_vec();
@@ -511,8 +506,8 @@ pub fn parse_u64(s: &str) -> u64 {
     let s = s.trim();
     if s.starts_with("0x") || s.starts_with("0X") {
         u64::from_str_radix(&s[2..], 16).unwrap_or(0)
-    } else if s.starts_with('#') {
-        u64::from_str_radix(&s[1..], 2).unwrap_or(0)
+    } else if let Some(stripped) = s.strip_prefix('#') {
+        u64::from_str_radix(stripped, 2).unwrap_or(0)
     } else {
         s.parse::<u64>().unwrap_or(0)
     }
