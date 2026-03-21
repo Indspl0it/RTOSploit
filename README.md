@@ -2,107 +2,350 @@
 
 **RTOS Exploitation & Bare-Metal Fuzzing Framework**
 
-RTOSploit is a security testing framework for embedded RTOS firmware. It provides grey-box fuzzing, static analysis, exploit module assessment and payload generation, CVE correlation, and automated report generation — all running entirely in QEMU with no physical hardware required.
+RTOSploit is a security testing framework purpose-built for embedded RTOS firmware. It combines grey-box fuzzing, static analysis, vulnerability assessment, CVE correlation, peripheral auto-rehosting, and automated reporting — all running entirely in software via QEMU emulation. No physical hardware required.
 
-**Supported RTOSes:** FreeRTOS · ThreadX · Zephyr
-**Supported architectures:** ARM Cortex-M (M3/M4/M7/M33) · RISC-V RV32I
+| | |
+|---|---|
+| **Supported RTOSes** | FreeRTOS, ThreadX, Zephyr, ESP-IDF, RTEMS (detection) |
+| **Architectures** | ARM Cortex-M (M0/M3/M4/M7/M33), RISC-V (RV32I/RV64), Xtensa, MIPS, AArch64 |
+| **Binary Formats** | ELF, Intel HEX, Motorola S-Record, Raw binary |
+| **Exploit Modules** | 15 modules across FreeRTOS, ThreadX, and Zephyr |
+| **Tests** | 1370+ unit tests |
+| **License** | GPL-3.0-only |
 
 ---
 
 ## Table of Contents
 
-- [Features](#features)
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [Usage Modes](#usage-modes)
-- [CLI Reference](#cli-reference)
-  - [Global Flags](#global-flags)
-  - [emulate](#emulate)
-  - [fuzz](#fuzz)
-  - [exploit](#exploit)
-  - [analyze](#analyze)
-  - [cve](#cve)
-  - [triage](#triage)
-  - [coverage](#coverage)
-  - [report](#report)
-  - [scan](#scan)
-  - [console](#console)
-  - [payload](#payload)
-  - [svd](#svd)
-  - [vulnrange](#vulnrange)
-- [Exploit Modules](#exploit-modules)
-- [Machine Configurations](#machine-configurations)
-- [Configuration File](#configuration-file)
-- [CI/CD Integration](#cicd-integration)
-- [Development](#development)
-- [Documentation](#documentation)
-- [License](#license)
+1. [Purpose](#1-purpose)
+2. [Architecture](#2-architecture)
+3. [Features](#3-features)
+4. [Installation](#4-installation)
+5. [Quick Start](#5-quick-start)
+6. [Usage Guide](#6-usage-guide)
+7. [CLI Reference](#7-cli-reference)
+8. [Exploit Modules](#8-exploit-modules)
+9. [Machine Configurations](#9-machine-configurations)
+10. [Configuration](#10-configuration)
+11. [CI/CD Integration](#11-cicd-integration)
+12. [Development](#12-development)
+13. [Troubleshooting](#13-troubleshooting)
+14. [Documentation](#14-documentation)
 
 ---
 
-## Features
+## 1. Purpose
 
-### Grey-box Fuzzing
+Embedded RTOS firmware (FreeRTOS, ThreadX, Zephyr) runs on billions of devices — medical implants, automotive ECUs, industrial PLCs, IoT gateways — yet security testing tools for these targets are fragmented, hardware-dependent, and expensive. RTOSploit closes this gap.
+
+**What RTOSploit does:**
+
+1. **Identifies** — Fingerprints RTOS type, version, MCU family, heap allocator, MPU configuration, and peripheral usage from a firmware binary alone
+2. **Emulates** — Boots firmware in QEMU with auto-detected peripheral models, HAL function intercepts, and smart MMIO fallback — zero manual configuration
+3. **Fuzzes** — Grey-box fuzzes the running firmware with AFL-compatible coverage tracking, crash deduplication, and multi-worker parallelism
+4. **Assesses** — Runs 15 exploit modules that detect known vulnerability patterns (heap corruption, MPU bypass, ISR hijacking, BLE overflows) and generate concrete payloads
+5. **Correlates** — Matches detected RTOS version against NVD CVE data
+6. **Reports** — Produces SARIF (for GitHub/IDE integration) and HTML reports with exploitability classification
+
+**What RTOSploit does NOT do:**
+
+- Execute exploits against live hardware (it's a software-only assessment tool)
+- Symbolic execution or concolic analysis (lightweight register tracking, not angr/Fuzzware)
+- Linux kernel or application-level fuzzing (RTOS/bare-metal only)
+- Hardware-in-the-loop via JTAG/SWD
+
+---
+
+## 2. Architecture
+
+RTOSploit is organized into layered subsystems. Data flows from firmware loading through analysis, emulation, and testing, converging into a unified reporting pipeline.
+
+```
+                            RTOSploit Architecture
+ ┌─────────────────────────────────────────────────────────────────────────┐
+ │                              CLI / Interactive TUI                      │
+ │  analyze | rehost | fuzz | exploit | scan | triage | report | console  │
+ └────┬──────────┬──────────┬──────────┬──────────┬──────────┬────────────┘
+      │          │          │          │          │          │
+      ▼          │          │          │          │          │
+ ┌─────────┐    │          │          │          │          │
+ │ Firmware │    │          │          │          │          │
+ │ Loader   │    │          │          │          │          │
+ │          │    │          │          │          │          │
+ │ ELF/HEX │    │          │          │          │          │
+ │ SREC/RAW │    │          │          │          │          │
+ └────┬─────┘    │          │          │          │          │
+      │          │          │          │          │          │
+      ▼          ▼          │          │          │          │
+ ┌──────────────────────┐   │          │          │          │
+ │   Static Analysis    │   │          │          │          │
+ │                      │   │          │          │          │
+ │ RTOS Fingerprint     │   │          │          │          │
+ │ Heap Detection       │   │          │          │          │
+ │ MPU Analysis         │   │          │          │          │
+ │ String Extraction    │   │          │          │          │
+ │ Peripheral Detection │◄──┘          │          │          │
+ │  (6-layer engine)    │             │          │          │
+ └────┬────────┬────────┘             │          │          │
+      │        │                      │          │          │
+      │        ▼                      │          │          │
+      │   ┌───────────────────┐       │          │          │
+      │   │  Auto-Config      │       │          │          │
+      │   │  Generator        │       │          │          │
+      │   │                   │       │          │          │
+      │   │ MCU→QEMU Mapping  │       │          │          │
+      │   │ SVD Model Loading │       │          │          │
+      │   │ HAL Hook Matching │       │          │          │
+      │   │ Peripheral Filter │       │          │          │
+      │   └────────┬──────────┘       │          │          │
+      │            │                  │          │          │
+      │            ▼                  ▼          │          │
+      │   ┌──────────────────────────────────┐   │          │
+      │   │      Emulation Engine            │   │          │
+      │   │                                  │   │          │
+      │   │  ┌──────────┐  ┌──────────────┐  │   │          │
+      │   │  │   QEMU   │  │   Unicorn    │  │   │          │
+      │   │  │  +GDB    │  │  (alt engine)│  │   │          │
+      │   │  └────┬─────┘  └──────┬───────┘  │   │          │
+      │   │       │               │           │   │          │
+      │   │       ▼               ▼           │   │          │
+      │   │  ┌───────────────────────────┐    │   │          │
+      │   │  │  Peripheral Intercept     │    │   │          │
+      │   │  │                           │    │   │          │
+      │   │  │ Layer 1: SVD Register     │    │   │          │
+      │   │  │ Layer 2: HAL Hooks        │    │   │          │
+      │   │  │ Layer 3: MMIO Fallback    │    │   │          │
+      │   │  │ Layer 4: System Registers │    │   │          │
+      │   │  └───────────────────────────┘    │   │          │
+      │   └──────────────────────────────────┘   │          │
+      │                    │                      │          │
+      │                    ▼                      ▼          │
+      │   ┌──────────────────────────────────────────────┐   │
+      │   │          Security Testing                    │   │
+      │   │                                              │   │
+      │   │  ┌─────────────┐  ┌───────────────────────┐  │   │
+      │   │  │  Fuzzing     │  │  Exploit Assessment   │  │   │
+      │   │  │  Engine      │  │                       │  │   │
+      │   │  │              │  │  15 modules:          │  │   │
+      │   │  │ Coverage     │  │  FreeRTOS (6)         │  │   │
+      │   │  │ Mutation     │  │  ThreadX (3)          │  │   │
+      │   │  │ Dedup        │  │  Zephyr (6)           │  │   │
+      │   │  │ Multi-worker │  │                       │  │   │
+      │   │  └──────┬───────┘  └───────────┬───────────┘  │   │
+      │   │         │                      │              │   │
+      │   └─────────┼──────────────────────┼──────────────┘   │
+      │             │                      │                  │
+      │             ▼                      ▼                  ▼
+      │   ┌────────────────────────────────────────────────────────┐
+      │   │                Post-Processing                        │
+      │   │                                                        │
+      │   │  Crash Triage → Exploitability Classification          │
+      │   │  Input Minimization → Minimal reproducing cases        │
+      │   │  CVE Correlation → Known vulnerability matching        │
+      │   │  Coverage Analysis → Instruction-level hit maps        │
+      │   └───────────────────────┬────────────────────────────────┘
+      │                           │
+      ▼                           ▼
+ ┌───────────────────────────────────────────┐
+ │              Reporting                    │
+ │                                           │
+ │  SARIF 2.1.0  │  HTML Dashboard  │  JSON  │
+ │  (CI/IDE)     │  (human review)  │ (API)  │
+ └───────────────────────────────────────────┘
+```
+
+### Peripheral Interception Architecture
+
+When firmware accesses a memory-mapped peripheral register, the request flows through a 4-layer handler chain:
+
+```
+  Firmware MMIO Access (e.g., write to 0x40004400)
+          │
+          ▼
+  ┌─────────────────────────────┐
+  │ 1. System Registers         │  0xE0000000 - 0xE00FFFFF
+  │    SysTick, NVIC, SCB, FPU  │  Cortex-M PPB region
+  │    (sensible defaults)      │
+  └──────────┬──────────────────┘
+             │ not system register
+             ▼
+  ┌─────────────────────────────┐
+  │ 2. SVD Peripheral Models    │  From CMSIS-SVD files
+  │    Register-level accuracy  │  Read/write tracking
+  │    Smart status heuristics  │  Clear-on-read for events
+  └──────────┬──────────────────┘
+             │ no SVD match
+             ▼
+  ┌─────────────────────────────┐
+  │ 3. HAL Function Hooks       │  112 HAL functions mapped
+  │    STM32 HAL (42 funcs)     │  nRF5 SDK (50 funcs)
+  │    Zephyr RTOS (20 funcs)   │  Return realistic values
+  └──────────┬──────────────────┘
+             │ no HAL match
+             ▼
+  ┌─────────────────────────────┐
+  │ 4. Smart MMIO Fallback      │  Catch-all handler
+  │    Ready-bit on first read  │  Echo-back written values
+  │    Poll loop detection      │  Access logging
+  └─────────────────────────────┘
+```
+
+### Peripheral Detection Engine (6 Layers)
+
+The detection engine identifies which peripherals firmware uses, even on fully stripped binaries:
+
+| Layer | Method | Weight | Works on stripped binaries? |
+|-------|--------|--------|---------------------------|
+| 1. Symbol | Match symbols against 112-entry HAL database | 0.6 | No (needs symbols) |
+| 2. String | SDK source file names, driver references | 0.4 | Yes (survives in assert strings) |
+| 3. Relocation | ELF relocation table entries | 0.7 | Partially (needs .dynsym) |
+| 4. Register | MMIO register access via Capstone disassembly | 0.9/0.8 | Yes (primary method) |
+| 5. Signature | Binary patterns for HAL init sequences | 0.7 | Yes |
+| 6. Devicetree | Zephyr devicetree node patterns | 0.8 | Yes (Zephyr only) |
+
+Evidence from all layers is aggregated with weighted scoring. Confidence levels: **HIGH** (>1.2), **MEDIUM** (0.6-1.2), **LOW** (<0.6).
+
+---
+
+## 3. Features
+
+### 3.1 Static Analysis (No QEMU Required)
+
+| Analysis | What it detects | Output |
+|----------|----------------|--------|
+| **RTOS Fingerprint** | FreeRTOS/ThreadX/Zephyr/ESP-IDF/RTEMS, version, confidence score | RTOS type, version string |
+| **MCU Family Detection** | nRF52, STM32F4, ESP32, LPC, SAM, RP2040, etc. | MCU family string |
+| **Heap Allocator** | FreeRTOS heap_1–heap_5, ThreadX byte pools, Zephyr slabs | Allocator type, heap base |
+| **MPU Configuration** | ARM Cortex-M MPU regions, executable/writable overlaps | Region map, vulnerabilities |
+| **Peripheral Detection** | UART, SPI, I2C, GPIO, BLE, Timer, etc. via 6-layer engine | Peripheral list with confidence |
+| **String Extraction** | RTOS markers, SDK references, error messages | Classified string list |
+| **Rehost Readiness** | Can this firmware be auto-rehosted? Score 0-100% | QEMU machine, SVD, HAL hooks |
+
+### 3.2 Automatic Firmware Rehosting
+
+RTOSploit can boot firmware with **zero manual configuration**:
+
+```bash
+rtosploit rehost -f firmware.elf
+```
+
+This single command:
+1. Detects RTOS type, version, architecture, and MCU family
+2. Resolves the correct QEMU machine (16 machine configs available)
+3. Downloads and parses the CMSIS-SVD file for register-level peripheral modeling
+4. Matches firmware symbols against 112 HAL function entries (STM32/nRF5/Zephyr)
+5. Creates SVD-backed peripheral models for accessed peripherals
+6. Sets up HAL function intercepts via GDB breakpoints
+7. Configures smart MMIO fallback for unmapped addresses
+8. Boots firmware in QEMU
+
+**Vendor HAL Models:**
+
+| Vendor | Peripherals Modeled | HAL Functions |
+|--------|-------------------|---------------|
+| STM32 HAL | UART, SPI, I2C, GPIO, RCC, Flash, Timer | 42 |
+| Nordic nRF5 SDK | UART, SPI, TWI, GPIO, BLE (SoftDevice), Timer, Clock, Power | 50 |
+| Zephyr RTOS | UART, SPI, I2C, GPIO, BLE, Device binding, Sleep | 20 |
+
+**Alternative Engine:** Unicorn-based emulation (optional) for MMIO-heavy workloads — 10-100x faster than QEMU+GDB for pure peripheral testing.
+
+### 3.3 Grey-Box Fuzzing
+
 - QEMU-based firmware fuzzer with AFL-compatible coverage bitmaps
-- Crash deduplication and seed corpus management
+- **Auto mode** (`--auto`): fingerprints firmware, discovers input points via HAL database, injects fuzz data through HAL receive functions — no manual `--inject-addr` needed
+- Crash deduplication (PC + CFSR + nearby-PC + backtrace frame matching)
+- Seed corpus management and coverage-guided mutation
+- Multi-worker parallel execution (`--jobs N`)
 - Live dashboard: executions/sec, crash count, coverage percentage
 - Optional native Rust fuzzer binary for maximum throughput
-- Simulation mode when native fuzzer is unavailable (useful for pipeline testing)
-- Multi-job parallel execution
+- Interrupt injection via NVIC for ISR-triggered code paths
 
-### Static Analysis — No QEMU Required
-- **RTOS fingerprinting** — Detect FreeRTOS, ThreadX, or Zephyr from binary patterns, with version and confidence score
-- **Heap allocator detection** — Identify heap_1 through heap_5 (FreeRTOS), ThreadX byte pools, Zephyr slabs; locate heap base address
-- **MPU configuration analysis** — Map ARM Cortex-M MPU regions, flag executable or writable overlaps, detect disabled protections
-- **String extraction** — Extract and classify embedded strings including RTOS-specific markers
+### 3.4 Exploit Assessment & Payload Generation
 
-### Exploit Modules
-- 15+ built-in modules targeting FreeRTOS, ThreadX, and Zephyr
-- Categories: heap corruption, MPU bypass, ISR hijacking, TCB overwrite, Bluetooth LE, race conditions
-- Non-destructive `check` mode for safe vulnerability probing
-- Metasploit-style console with tab completion, history, and option validation
+15 built-in modules that detect vulnerability patterns and generate concrete artifacts:
 
-### Vulnerability Intelligence
-- **CVE correlation** — Match detected RTOS type and version against a bundled NVD-sourced CVE database
-- **CVE search** — Free-text search across CVE IDs, descriptions, and product names
-- **NVD sync** — Pull latest entries from NIST with optional API key for higher rate limits
+| Category | Modules | What they produce |
+|----------|---------|-------------------|
+| Heap Corruption | 4 | Overflow buffers, fake metadata, write primitives |
+| MPU Bypass | 2 | Privilege escalation payloads, ROP chains |
+| ISR Hijacking | 1 | Vector table redirect payloads |
+| BLE Exploits | 4 | Malformed advertising/L2CAP/ASCS packets |
+| Kernel Attacks | 2 | TCB/thread entry overwrites, syscall chains |
+| Reconnaissance | 2 | Userspace config detection, race conditions |
 
-### Emulation & Debugging
-- QEMU process orchestration with automatic version checking (requires 9.0+)
-- GDB stub integration for live firmware debugging
-- CMSIS-SVD peripheral modeling for accurate register-level emulation
-- Serial/UART forwarding to TCP port
+Each module provides:
+- `check` — non-destructive vulnerability assessment (safe to run in CI)
+- `exploit` — generates payload artifacts (buffer, addresses, chain)
+- Optional `inject` — writes payload into live QEMU via GDB (when emulation is active)
 
-### Post-Fuzzing Analysis
-- **Crash triage** — Classify exploitability (EXPLOITABLE, PROBABLY_EXPLOITABLE, UNKNOWN) using CFSR flags, fault types, and PC/SP control detection
-- **Input minimization** — Automatically reduce crash inputs to minimal reproducing cases
-- **Coverage visualization** — Annotated disassembly (terminal or HTML) with instruction-level hit counts
+**Payload Generation** (standalone):
+- ARM Thumb2 and RISC-V shellcode templates (NOP sled, infinite loop, MPU disable, VTOR redirect)
+- ROP gadget finder with bad-character filtering
+- XOR and null-free encoders
 
-### Reporting
-- **SARIF** — IDE-compatible format for VS Code, GitHub Code Scanning, Azure DevOps
-- **HTML dashboard** — Interactive report with severity color-coding and finding details
-- Severity-based CI pass/fail threshold (`--fail-on critical|high|medium|low|any`)
+### 3.5 CVE Intelligence
 
-### Interactive Mode
-- Arrow-key menus with contextual categories
-- Path auto-completion for firmware files
-- Firmware info panel: RTOS name, version, architecture, machine, confidence
-- Live fuzzer dashboard embedded in the menu flow
-- Post-fuzz triage and report generation without leaving the tool
+- **CVE Correlation** — match detected RTOS type and version against bundled NVD database
+- **CVE Search** — free-text search across CVE IDs, descriptions, product names
+- **NVD Sync** — pull latest entries from NIST NVD API (with rate limit backoff)
+- **VulnRange Labs** — CTF-style CVE reproduction challenges with progressive hints
+
+### 3.6 Post-Fuzzing Analysis
+
+- **Crash Triage** — classify exploitability: EXPLOITABLE, PROBABLY_EXPLOITABLE, PROBABLY_NOT, UNKNOWN
+- **Input Minimization** — automatically reduce crash inputs to minimal reproducing cases
+- **Coverage Visualization** — instruction-level hit maps (terminal and HTML)
+
+### 3.7 Reporting
+
+| Format | Purpose | Integration |
+|--------|---------|------------|
+| SARIF 2.1.0 | Machine-readable findings | GitHub Code Scanning, VS Code, Azure DevOps |
+| HTML | Human-readable dashboard | Executive review, sharing |
+| JSON | API consumption | Scripting, tool chaining |
+
+CI exit codes: `0` = clean, `1` = findings above threshold, `2` = error.
+
+### 3.8 Interactive Mode
+
+Arrow-key TUI with contextual menus. Load firmware, and RTOSploit auto-detects everything:
+
+```
+? What would you like to do?
+> Load Firmware
+  ──────────────
+  Quick Scan (CI Pipeline)
+  Search CVE Database
+  ──────────────
+  Interactive Console (Metasploit-style)
+  ──────────────
+  Settings
+  Exit
+```
+
+After loading, the firmware menu provides all actions: boot, fuzz, exploit, analyze, triage, report.
+
+**Metasploit-Style Console:**
+```
+rtosploit> use freertos/heap_overflow
+rtosploit(freertos/heap_overflow)> show options
+rtosploit(freertos/heap_overflow)> set firmware ./fw.bin
+rtosploit(freertos/heap_overflow)> check
+rtosploit(freertos/heap_overflow)> exploit
+```
 
 ---
 
-## Installation
+## 4. Installation
 
 ### Requirements
 
-- Python 3.10 or later
-- QEMU 9.0 or later with `qemu-system-arm` (and/or `qemu-system-riscv32`) in `PATH`
-- Optional: Rust toolchain for the native fuzzer binary
+- Python 3.10+
+- QEMU 9.0+ with `qemu-system-arm` and/or `qemu-system-riscv32` in PATH
+- Optional: Rust toolchain for native fuzzer binary
+- Optional: `unicorn` Python package for alternative emulation engine
 
 ### From Source
-
-See [docs/installation.md](docs/installation.md) for full requirements, QEMU setup on all platforms, and optional Rust fuzzer build instructions.
 
 ```bash
 git clone https://github.com/rtosploit/rtosploit
@@ -124,348 +367,393 @@ sudo apt install qemu-system-arm qemu-system-misc
 brew install qemu
 ```
 
-**Verify the installation:**
+**Windows (WSL2):**
 ```bash
-qemu-system-arm --version   # must report 9.0.0 or later
+sudo apt install qemu-system-arm qemu-system-misc
 ```
 
-### Native Fuzzer (optional)
+**Verify:**
+```bash
+qemu-system-arm --version   # Must report 9.0.0 or later
+rtosploit --version          # Should print version
+```
 
-The native Rust fuzzer provides real coverage-guided mutation. Without it, RTOSploit runs in **simulation mode**, which is still useful for pipeline and dashboard testing:
+### Optional: Native Rust Fuzzer
+
+The native fuzzer provides real coverage-guided mutation. Without it, RTOSploit runs in simulation mode (still useful for pipeline testing):
 
 ```bash
 cargo build --release -p rtosploit-fuzzer
-# The rtosploit-fuzzer binary is then automatically detected at runtime
 ```
+
+### Optional: Unicorn Engine
+
+For MMIO-heavy workloads without QEMU overhead:
+
+```bash
+pip install unicorn
+```
+
+See [docs/installation.md](docs/installation.md) for detailed platform-specific instructions.
 
 ---
 
-## Quick Start
+## 5. Quick Start
 
-### Interactive Mode
-
-Launch with no arguments:
+### Auto-Rehost Firmware (Zero Config)
 
 ```bash
-rtosploit
+rtosploit rehost -f firmware.elf
 ```
 
-Select **Load Firmware**, provide a path, and RTOSploit will auto-detect the format (ELF, Intel HEX, SREC, or raw binary), fingerprint the RTOS, select a default QEMU machine, and drop into the firmware menu.
+RTOSploit auto-detects RTOS, MCU, peripherals, and boots the firmware.
 
-### One-shot Security Scan
+### Full Security Scan (CI/CD)
 
 ```bash
 rtosploit scan \
-  --firmware firmware.bin \
-  --machine mps2-an385 \
+  -f firmware.elf \
   --fuzz-timeout 120 \
   --format both \
-  --output ./results
-```
-
-Exit codes: `0` = pass, `1` = findings above threshold, `2` = error.
-
-### Fuzz Only
-
-```bash
-rtosploit fuzz \
-  --firmware firmware.bin \
-  --machine mps2-an385 \
-  --output ./fuzz-out \
-  --timeout 300
+  --output ./results \
+  --fail-on high
 ```
 
 ### Static Analysis Only
 
 ```bash
-rtosploit analyze --firmware firmware.bin --all
+rtosploit analyze -f firmware.elf --all
+```
+
+### Auto-Fuzz (Discovers Input Points)
+
+```bash
+rtosploit fuzz -f firmware.elf --auto --timeout 300
 ```
 
 ### CVE Check
 
 ```bash
-rtosploit cve scan --firmware firmware.bin
+rtosploit cve scan -f firmware.elf
 ```
-
----
-
-## Usage Modes
 
 ### Interactive Mode
 
-Run `rtosploit` with no arguments to enter the guided menu system:
-
-```
-  RTOSploit   Firmware Security Testing Framework
-
-? What would you like to do?
-❯ Load Firmware
-  ──────────────
-  Quick Scan (CI Pipeline)
-  Search CVE Database
-  ──────────────
-  Interactive Console (Metasploit-style)
-  ──────────────
-  Settings
-  Exit
-```
-
-After loading firmware, the menu expands with all relevant actions grouped by category:
-
-```
-? Select action:
-  ── Emulation ──
-❯ Boot Firmware in QEMU
-  Attach GDB Debugger
-  ── Security Testing ──
-  Fuzz Firmware
-  Run Exploit Modules
-  Full Security Scan
-  ── Analysis ──
-  Static Analysis (fingerprint, heap, MPU, strings)
-  CVE Correlation
-  Triage Crash Directory
-  ── Output ──
-  View Coverage
-  Generate Reports
-  ──────────────
-  Load Different Firmware
-  Back to Main Menu
-```
-
-Use `--debug` for verbose logging in interactive mode:
-
 ```bash
-rtosploit --debug
-```
-
-### CLI Mode
-
-Any subcommand bypasses interactive mode:
-
-```bash
-rtosploit scan --help
-rtosploit --json cve search "heap overflow"
-rtosploit --quiet fuzz --firmware fw.bin --machine mps2-an385
+rtosploit
 ```
 
 ---
 
-## CLI Reference
+## 6. Usage Guide
+
+### 6.1 Workflow: Analyze → Rehost → Fuzz → Triage → Report
+
+This is the typical end-to-end workflow for assessing a firmware binary:
+
+```bash
+# Step 1: Understand the firmware
+rtosploit analyze -f firmware.elf --all
+# Output: RTOS type, version, MCU, heap, MPU, peripherals
+
+# Step 2: Check rehosting readiness
+rtosploit analyze -f firmware.elf --rehost-check
+# Output: QEMU machine, SVD availability, HAL hooks, readiness score
+
+# Step 3: Boot firmware with auto-rehosting
+rtosploit rehost -f firmware.elf --save-config auto_config.yaml
+# Boots firmware, saves generated peripheral config for inspection
+
+# Step 4: Fuzz with auto-discovered input points
+rtosploit fuzz -f firmware.elf --auto --timeout 600 --output fuzz-out
+
+# Step 5: Triage crashes
+rtosploit triage -c fuzz-out/crashes -f firmware.elf --format sarif -o triage.sarif
+
+# Step 6: Generate reports
+rtosploit report -i fuzz-out -o reports --format both
+
+# Step 7: Check known CVEs
+rtosploit cve scan -f firmware.elf
+```
+
+### 6.2 Workflow: Exploit Assessment
+
+```bash
+# List all available exploit modules
+rtosploit exploit list
+
+# Check if firmware is vulnerable (non-destructive)
+rtosploit exploit check freertos/heap_overflow -f firmware.elf -m mps2-an385
+
+# Generate exploit artifacts
+rtosploit exploit run freertos/mpu_bypass -f firmware.elf -m mps2-an385
+
+# Interactive console for iterative testing
+rtosploit console
+> use freertos/heap_overflow
+> set firmware ./fw.elf
+> set machine mps2-an385
+> check
+> exploit
+```
+
+### 6.3 Workflow: CI/CD Pipeline
+
+```bash
+# One command, returns exit code for CI
+rtosploit scan \
+  -f firmware.elf \
+  --fuzz-timeout 60 \
+  --format sarif \
+  --output scan-output \
+  --fail-on critical
+
+# Exit code 0 = pass, 1 = findings, 2 = error
+echo $?
+```
+
+### 6.4 JSON Output for Scripting
+
+Every command supports `--json` for machine-readable output:
+
+```bash
+# Pipe RTOS detection to jq
+rtosploit --json analyze -f firmware.elf --detect-rtos | jq '.rtos'
+
+# Script fuzz result processing
+rtosploit --json fuzz -f fw.elf --auto --timeout 60 | jq '.stats'
+
+# CVE data for external tools
+rtosploit --json cve scan -f firmware.elf | jq '.cves[] | select(.severity == "critical")'
+```
+
+### 6.5 Saving and Reusing Auto-Generated Configs
+
+```bash
+# Generate and save peripheral config
+rtosploit rehost -f firmware.elf --save-config my_config.yaml
+
+# Edit the config to customize peripheral behavior
+vim my_config.yaml
+
+# Reuse the edited config
+rtosploit rehost -f firmware.elf -p my_config.yaml
+```
+
+---
+
+## 7. CLI Reference
 
 ### Global Flags
 
-Available before any subcommand. Affect all commands.
+Available before any subcommand:
 
 | Flag | Short | Description |
 |------|-------|-------------|
 | `--verbose` | `-v` | Enable DEBUG-level logging |
-| `--quiet` | `-q` | Suppress INFO messages; show only warnings and errors |
-| `--json` | | Output results as machine-readable JSON |
-| `--config PATH` | | Load settings from a custom `.rtosploit.yaml` |
+| `--quiet` | `-q` | Suppress INFO messages |
+| `--json` | | Machine-readable JSON output |
+| `--config PATH` | | Custom `.rtosploit.yaml` config |
 | `--version` | | Print version and exit |
-| `--help` | | Show help and exit |
+
+---
+
+### `analyze`
+
+Static firmware analysis. Runs without QEMU.
+
+```
+rtosploit analyze -f PATH [FLAGS]
+```
+
+| Option | Description |
+|--------|-------------|
+| `-f, --firmware PATH` | Firmware binary (required) |
+| `--detect-rtos` | Fingerprint RTOS type, version, confidence |
+| `--detect-heap` | Identify heap allocator and base address |
+| `--detect-mpu` | Analyze ARM MPU regions and vulnerabilities |
+| `--strings` | Extract and classify embedded strings |
+| `--detect-peripherals` | 6-layer peripheral detection engine |
+| `--rehost-check` | Check auto-rehosting readiness (0-100% score) |
+| `--all` | Run all analyses |
 
 ```bash
-# JSON output for scripting
-rtosploit --json analyze --firmware fw.bin --all | jq '.rtos'
+# Full analysis
+rtosploit analyze -f firmware.elf --all
 
-# Suppress noise in CI
-rtosploit --quiet scan --firmware fw.bin --machine mps2-an385
+# JSON for scripting
+rtosploit --json analyze -f firmware.elf --all | jq '.peripherals'
 
-# Custom config for a single run
-rtosploit --config ./ci-config.yaml scan --firmware fw.bin --machine mps2-an385
+# Rehost readiness check
+rtosploit analyze -f firmware.elf --rehost-check
+```
+
+<details>
+<summary>Example JSON output</summary>
+
+```json
+{
+  "firmware": "firmware.elf",
+  "rtos": {
+    "detected": "freertos",
+    "version": "10.4.3",
+    "confidence": 0.92,
+    "architecture": "armv7m",
+    "mcu_family": "stm32f4"
+  },
+  "peripherals": {
+    "architecture": "armv7m",
+    "mcu_family": "stm32f4",
+    "peripherals": {
+      "UART": {"type": "uart", "confidence": 1.50, "confidence_level": "high"},
+      "SPI": {"type": "spi", "confidence": 0.90, "confidence_level": "medium"}
+    }
+  },
+  "rehost_check": {
+    "readiness_score": 85,
+    "qemu_machine": "netduino2",
+    "svd_available": true,
+    "hal_hooks": 12
+  }
+}
+```
+</details>
+
+---
+
+### `rehost`
+
+Auto-rehost firmware with peripheral interception.
+
+```
+rtosploit rehost -f PATH [OPTIONS]
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `-f, --firmware PATH` | required | Firmware binary |
+| `-m, --machine TEXT` | auto-detect | QEMU machine name |
+| `-p, --peripheral-config PATH` | auto-generate | YAML peripheral config |
+| `--auto / --no-auto` | auto when no config | Auto-detect peripherals |
+| `--save-config PATH` | — | Save auto-generated config |
+| `--svd PATH` | — | Override SVD file |
+| `--engine [qemu\|unicorn]` | qemu | Emulation engine |
+| `-t, --timeout INTEGER` | 0 (unlimited) | Timeout in seconds |
+
+```bash
+# Zero-config auto-rehost
+rtosploit rehost -f firmware.elf
+
+# With explicit machine
+rtosploit rehost -f firmware.elf -m mps2-an385
+
+# Save config for editing
+rtosploit rehost -f firmware.elf --save-config config.yaml
+
+# Unicorn engine (faster, no QEMU needed)
+rtosploit rehost -f firmware.elf --engine unicorn
+
+# Custom SVD file
+rtosploit rehost -f firmware.elf --svd STM32F407.svd
 ```
 
 ---
 
 ### `emulate`
 
-Launch a firmware image in QEMU.
+Launch QEMU emulation without peripheral interception.
 
 ```
-rtosploit emulate --firmware PATH --machine NAME [OPTIONS]
+rtosploit emulate -f PATH -m NAME [OPTIONS]
 ```
 
-| Option | Short | Default | Description |
-|--------|-------|---------|-------------|
-| `--firmware` | `-f` | **required** | Firmware binary (.bin, .elf, .hex) |
-| `--machine` | `-m` | **required** | QEMU machine name (e.g. `mps2-an385`) |
-| `--gdb` | | `false` | Enable GDB remote stub |
-| `--gdb-port` | | `1234` | Port for the GDB stub |
-| `--serial-port` | | none | Forward UART output to this TCP port |
-| `--svd` | | none | CMSIS-SVD file for peripheral definitions |
+| Option | Default | Description |
+|--------|---------|-------------|
+| `-f, --firmware PATH` | required | Firmware binary |
+| `-m, --machine TEXT` | required | QEMU machine name |
+| `--gdb` | false | Enable GDB remote stub |
+| `--gdb-port INTEGER` | 1234 | GDB stub port |
+| `--serial-port INTEGER` | — | Forward UART to TCP port |
+| `--svd PATH` | — | SVD file for peripherals |
 
 ```bash
 # Basic boot
-rtosploit emulate --firmware freertos_demo.elf --machine mps2-an385
+rtosploit emulate -f firmware.elf -m mps2-an385
 
-# With GDB for live debugging
-rtosploit emulate --firmware fw.bin --machine mps2-an385 --gdb --gdb-port 3333
-# In another terminal:
-arm-none-eabi-gdb -ex "target remote :3333" fw.elf
-
-# With SVD peripheral accuracy
-rtosploit emulate --firmware fw.bin --machine stm32f4 --svd STM32F407.svd
-
-# JSON status for scripts
-rtosploit --json emulate --firmware fw.bin --machine mps2-an385
+# With GDB debugging
+rtosploit emulate -f firmware.elf -m mps2-an385 --gdb
+# Then: arm-none-eabi-gdb -ex "target remote :1234" firmware.elf
 ```
 
 ---
 
 ### `fuzz`
 
-Start QEMU-based grey-box fuzzing.
+Grey-box firmware fuzzing.
 
 ```
-rtosploit fuzz --firmware PATH --machine NAME [OPTIONS]
+rtosploit fuzz -f PATH [OPTIONS]
 ```
 
-| Option | Short | Default | Description |
-|--------|-------|---------|-------------|
-| `--firmware` | `-f` | **required** | Firmware binary |
-| `--machine` | `-m` | **required** | QEMU machine name |
-| `--rtos` | | `auto` | Override RTOS: `freertos`, `threadx`, `zephyr`, `auto` |
-| `--output` | `-o` | `fuzz-output` | Output directory for crashes and corpus |
-| `--seeds` | `-s` | none | Seed corpus directory |
-| `--timeout` | `-t` | `0` | Stop after N seconds (0 = run indefinitely) |
-| `--jobs` | `-j` | `1` | Parallel fuzzer instances |
-
-Output structure created automatically:
-```
-fuzz-output/
-  crashes/     # One JSON file per unique crash
-  corpus/      # Corpus entries that increased coverage
-```
-
-Live dashboard during fuzzing:
-```
-┌─────────────────── RTOSploit Fuzzer Dashboard ──────────────────┐
-│ Metric          Value                                            │
-│ ─────────────── ─────────────────────────────────────────────── │
-│ Elapsed Time    00:05:23                                         │
-│ Executions      48,392                                           │
-│ Exec/sec        149.9                                            │
-│ Crashes Found   3                                                │
-│ Coverage %      12.4%                                            │
-│ Corpus Size     31                                               │
-└─────────────────────────────────────────────────────────────────┘
-```
+| Option | Default | Description |
+|--------|---------|-------------|
+| `-f, --firmware PATH` | required | Firmware binary |
+| `-m, --machine TEXT` | required (unless `--auto`) | QEMU machine |
+| `--auto` | false | Auto-discover inputs, auto-detect machine |
+| `--rtos [freertos\|threadx\|zephyr\|auto]` | auto | Target RTOS |
+| `-o, --output PATH` | fuzz-output | Output directory |
+| `-t, --timeout INTEGER` | 0 | Timeout in seconds |
+| `-j, --jobs INTEGER` | 1 | Parallel workers |
+| `--persistent` | false | Use persistent mode (faster) |
+| `--inject-addr TEXT` | 0x20010000 | Input injection address (hex) |
+| `--peripheral-config PATH` | — | HAL intercept config |
 
 ```bash
-# 5-minute session
-rtosploit fuzz --firmware fw.bin --machine mps2-an385 --timeout 300
+# Fully automatic
+rtosploit fuzz -f firmware.elf --auto --timeout 300
 
-# With seeds, custom output, 4 parallel instances
-rtosploit fuzz --firmware fw.bin --machine mps2-an385 \
-  --seeds ./seeds --output ./fuzz-out --jobs 4 --timeout 3600
+# Manual configuration
+rtosploit fuzz -f firmware.elf -m mps2-an385 -t 600 -j 4
 
-# JSON status only (no live dashboard)
-rtosploit --json fuzz --firmware fw.bin --machine mps2-an385 --output ./out
+# With seed corpus
+rtosploit fuzz -f firmware.elf -m mps2-an385 --seed ./seeds -o ./fuzz-out
+```
+
+**Live Dashboard:**
+```
+┌─────────────── RTOSploit Fuzzer Dashboard ───────────────┐
+│ Elapsed Time    00:05:23                                  │
+│ Executions      48,392                                    │
+│ Exec/sec        149.9                                     │
+│ Crashes Found   3                                         │
+│ Coverage %      12.4%                                     │
+│ Corpus Size     31                                        │
+└───────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ### `exploit`
 
-Manage and run exploit modules (vulnerability assessment and payload generation).
+Exploit module assessment and payload generation.
 
-#### `exploit list`
+**Subcommands:** `list`, `info`, `check`, `run`
 
 ```bash
+# List all modules
 rtosploit exploit list
-rtosploit --json exploit list
-```
 
-Table columns: Module Path, Name, RTOS, Category, Reliability, CVE.
-
-#### `exploit info MODULE_PATH`
-
-```bash
+# Module details
 rtosploit exploit info freertos/heap_overflow
-```
 
-Shows description, all options with types and defaults, CVE if applicable.
+# Non-destructive check
+rtosploit exploit check freertos/mpu_bypass -f firmware.elf -m mps2-an385
 
-#### `exploit run MODULE_PATH`
-
-```bash
+# Generate artifacts
 rtosploit exploit run freertos/heap_overflow \
-  --firmware fw.bin \
-  --machine mps2-an385 \
-  --option PAYLOAD_ADDRESS=0x20001000 \
-  --option HEAP_OFFSET=64
-```
-
-| Option | Short | Description |
-|--------|-------|-------------|
-| `--firmware` | `-f` | Target firmware binary |
-| `--machine` | `-m` | QEMU machine name |
-| `--option` | `-o` | Module option as `KEY=VALUE` (repeatable) |
-| `--payload` | | Payload name or file path |
-
-#### `exploit check MODULE_PATH`
-
-Non-destructive vulnerability probe. Only checks for vulnerability presence — does not generate exploit artifacts.
-
-```bash
-rtosploit exploit check freertos/mpu_bypass \
-  --firmware fw.bin \
-  --machine mps2-an385
-```
-
----
-
-### `analyze`
-
-Static firmware analysis. Runs entirely without QEMU.
-
-```
-rtosploit analyze --firmware PATH [FLAGS]
-```
-
-| Option | Short | Description |
-|--------|-------|-------------|
-| `--firmware` | `-f` | **required** — Firmware binary |
-| `--detect-rtos` | | Fingerprint RTOS type, version, and confidence |
-| `--detect-heap` | | Identify heap allocator variant and base address |
-| `--detect-mpu` | | Analyze ARM MPU regions and flag vulnerabilities |
-| `--strings` | | Extract and classify embedded strings |
-| `--all` | | Run all analyses |
-
-```bash
-# Quick RTOS check
-rtosploit analyze --firmware fw.bin --detect-rtos
-
-# Full analysis, JSON output
-rtosploit --json analyze --firmware fw.bin --all
-```
-
-JSON output structure:
-```json
-{
-  "firmware": "fw.bin",
-  "rtos": {
-    "detected": "freertos",
-    "version": "10.4.3",
-    "confidence": 0.92
-  },
-  "heap": {
-    "type": "heap_4",
-    "base": "0x20001800"
-  },
-  "mpu": {
-    "present": true,
-    "regions_configured": 4,
-    "vulnerable": false,
-    "vulnerabilities": []
-  },
-  "strings": {
-    "count": 142,
-    "sample": ["FreeRTOS", "IDLE", "prvIdleTask"]
-  }
-}
+  -f firmware.elf -m mps2-an385 \
+  --option PAYLOAD_ADDRESS=0x20001000
 ```
 
 ---
@@ -474,235 +762,108 @@ JSON output structure:
 
 CVE database operations.
 
-#### `cve scan`
-
-Fingerprint firmware and list applicable CVEs.
+**Subcommands:** `scan`, `search`, `update`
 
 ```bash
-rtosploit cve scan --firmware fw.bin
-rtosploit cve scan --firmware fw.bin --rtos freertos --version "10.4.3"
-```
+# Scan firmware for applicable CVEs
+rtosploit cve scan -f firmware.elf
 
-| Option | Description |
-|--------|-------------|
-| `--firmware` | **required** — Firmware binary |
-| `--rtos` | Override RTOS detection |
-| `--version` | Override version detection |
-
-Output table: CVE ID, CVSS, severity, exploit availability, description.
-
-#### `cve search TERM`
-
-```bash
+# Search by term
 rtosploit cve search "heap overflow"
 rtosploit cve search CVE-2021-31571
-rtosploit --json cve search freertos
-```
 
-#### `cve update`
-
-Pull new entries from NIST NVD.
-
-```bash
-# Rate-limited (no key)
-rtosploit cve update
-
-# With API key
-NVD_API_KEY=your-key rtosploit cve update
-
-# Specific product only
-rtosploit cve update --product freertos
+# Update from NVD
+rtosploit cve update --api-key YOUR_KEY
 ```
 
 ---
 
 ### `triage`
 
-Classify crash exploitability and minimize inputs.
+Crash classification and input minimization.
 
 ```
-rtosploit triage --crash-dir DIR --firmware PATH [OPTIONS]
+rtosploit triage -c DIR -f PATH [OPTIONS]
 ```
 
-| Option | Short | Default | Description |
-|--------|-------|---------|-------------|
-| `--crash-dir` | `-c` | **required** | Directory of crash JSON files |
-| `--firmware` | `-f` | **required** | Firmware binary for replay |
-| `--machine` | `-m` | `mps2-an385` | QEMU machine for replay |
-| `--minimize` | | `true` | Reduce crash inputs to minimal size |
-| `--format` | | `text` | Output format: `text`, `json`, `sarif` |
-| `--output` | `-o` | stdout | Write to file instead of stdout |
+| Option | Default | Description |
+|--------|---------|-------------|
+| `-c, --crash-dir PATH` | required | Crash JSON directory |
+| `-f, --firmware PATH` | required | Firmware binary |
+| `-m, --machine TEXT` | mps2-an385 | QEMU machine |
+| `--minimize/--no-minimize` | minimize | Minimize inputs |
+| `--format [text\|json\|sarif]` | text | Output format |
+| `-o, --output PATH` | stdout | Output file |
 
-**Exploitability classes:**
+**Exploitability Classes:**
 
 | Class | Meaning |
 |-------|---------|
-| `EXPLOITABLE` | PC control confirmed, executable redirect possible |
-| `PROBABLY_EXPLOITABLE` | Partial control or write-what-where condition |
-| `PROBABLY_NOT_EXPLOITABLE` | Crash without meaningful memory influence |
-| `UNKNOWN` | Insufficient data to classify |
-
-```bash
-# Text output (human-readable)
-rtosploit triage --crash-dir ./fuzz-out/crashes --firmware fw.bin
-
-# SARIF for CI
-rtosploit triage --crash-dir ./crashes --firmware fw.bin \
-  --format sarif --output triage.sarif.json
-
-# JSON for scripting
-rtosploit --json triage --crash-dir ./crashes --firmware fw.bin
-```
+| EXPLOITABLE | PC control confirmed |
+| PROBABLY_EXPLOITABLE | Partial control or write-what-where |
+| PROBABLY_NOT_EXPLOITABLE | Crash without meaningful influence |
+| UNKNOWN | Insufficient data |
 
 ---
 
 ### `coverage`
 
-Visualize fuzzing coverage against firmware disassembly.
+Coverage visualization.
 
-#### `coverage view`
+**Subcommands:** `stats`, `view`
 
 ```bash
-# Terminal view (default)
-rtosploit coverage view --firmware fw.bin --bitmap ./fuzz-out/coverage.bitmap
+# Coverage statistics
+rtosploit coverage stats -f firmware.elf -b coverage.bitmap
+
+# Terminal visualization
+rtosploit coverage view -f firmware.elf -b coverage.bitmap
 
 # HTML report
-rtosploit coverage view --firmware fw.bin --trace ./trace.log \
-  --format html --output coverage.html
-```
-
-| Option | Short | Default | Description |
-|--------|-------|---------|-------------|
-| `--firmware` | `-f` | **required** | Firmware binary |
-| `--bitmap` | `-b` | none | AFL-style coverage bitmap file |
-| `--trace` | `-t` | none | Trace log file |
-| `--base-address` | | `0x08000000` | Firmware load address (hex) |
-| `--format` | | `terminal` | `terminal` or `html` |
-| `--output` | `-o` | `coverage_report.html` | HTML output path |
-| `--max-lines` | | `50` | Maximum lines in terminal view |
-
-#### `coverage stats`
-
-```bash
-rtosploit --json coverage stats --firmware fw.bin --bitmap ./bitmap
-```
-
-```json
-{
-  "total_instructions": 4821,
-  "covered_instructions": 1134,
-  "coverage_percent": 23.5,
-  "total_edges": 892,
-  "hot_spots": [
-    { "address": "0x00001248", "hits": 4821 },
-    { "address": "0x0000124e", "hits": 3902 }
-  ]
-}
+rtosploit coverage view -f firmware.elf -t trace.log --format html -o coverage.html
 ```
 
 ---
 
 ### `report`
 
-Generate SARIF or HTML reports from collected findings.
-
-```
-rtosploit report --input-dir DIR --output DIR [OPTIONS]
-```
-
-| Option | Short | Default | Description |
-|--------|-------|---------|-------------|
-| `--input-dir` | `-i` | **required** | Directory with crash/exploit JSON files |
-| `--output` | `-o` | **required** | Output directory |
-| `--format` | `-f` | `both` | `sarif`, `html`, or `both` |
-| `--firmware` | | `unknown` | Firmware name for report metadata |
-| `--architecture` | | `armv7m` | Architecture for report metadata |
+Generate SARIF and/or HTML reports.
 
 ```bash
-# Full report from scan output
-rtosploit report \
-  --input-dir ./scan-output \
-  --output ./reports \
-  --format both
-
-# SARIF only for GitHub Code Scanning
-rtosploit report \
-  --input-dir ./crashes \
-  --output ./sarif-out \
-  --format sarif
+rtosploit report -i ./scan-output -o ./reports --format both
+rtosploit report -i ./crashes -o ./reports --format sarif
 ```
-
-SARIF reports are compatible with GitHub Code Scanning (`upload-sarif` action), VS Code SARIF Viewer, and Azure DevOps Security Center.
 
 ---
 
 ### `scan`
 
-Full end-to-end security scan. Orchestrates all phases and returns a CI exit code.
+Full end-to-end security scan pipeline (CI/CD mode).
 
 ```
-rtosploit scan --firmware PATH --machine NAME [OPTIONS]
+rtosploit scan -f PATH [OPTIONS]
 ```
 
-| Option | Short | Default | Description |
-|--------|-------|---------|-------------|
-| `--firmware` | `-f` | **required** | Firmware binary |
-| `--machine` | `-m` | `mps2-an385` | QEMU machine |
-| `--fuzz-timeout` | | `60` | Fuzzing phase duration (seconds) |
-| `--format` | | `both` | Report format: `sarif`, `html`, `both` |
-| `--output` | `-o` | `scan-output` | Output directory |
-| `--fail-on` | | `critical` | Severity threshold: `critical`, `high`, `medium`, `low`, `any` |
-| `--skip-fuzz` | | false | Skip fuzzing phase |
-| `--skip-cve` | | false | Skip CVE correlation |
-| `--no-minimize` | | false | Skip crash minimization |
-| `--architecture` | | `armv7m` | Target architecture |
+| Option | Default | Description |
+|--------|---------|-------------|
+| `-f, --firmware PATH` | required | Firmware binary |
+| `-m, --machine TEXT` | mps2-an385 | QEMU machine |
+| `--fuzz-timeout INTEGER` | 60 | Fuzzing duration (seconds) |
+| `--format [sarif\|html\|both]` | both | Report format |
+| `-o, --output PATH` | scan-output | Output directory |
+| `--fail-on [critical\|high\|medium\|low\|any]` | critical | Exit code threshold |
+| `--skip-fuzz` | false | Skip fuzzing phase |
+| `--skip-cve` | false | Skip CVE correlation |
 
-**Exit codes:**
+**Pipeline Phases:** Load → Fingerprint → CVE Correlate → Fuzz → Triage → Report
 
-| Code | Meaning |
-|------|---------|
-| `0` | Clean — no findings at or above `--fail-on` severity |
-| `1` | Findings found at or above threshold |
-| `2` | Internal error (QEMU failure, missing file, etc.) |
-
-**Pipeline phases:**
-1. Load and validate firmware
-2. RTOS fingerprinting (type, version, heap, MPU, strings)
-3. CVE correlation
-4. Grey-box fuzzing
-5. Crash triage and minimization
-6. Report generation
-
-```bash
-# Standard CI scan
-rtosploit scan \
-  --firmware firmware.bin \
-  --machine mps2-an385 \
-  --fuzz-timeout 120 \
-  --output ./scan-output
-
-# Analysis only, no fuzzing, no CVE
-rtosploit scan --firmware fw.bin --machine mps2-an385 --skip-fuzz --skip-cve
-
-# Fail on any finding
-rtosploit scan --firmware fw.bin --machine mps2-an385 --fail-on any
-```
-
-**Output structure:**
-```
-scan-output/
-  report.sarif.json
-  report.html
-  crashes/
-  corpus/
-  triage/
-```
+**Exit Codes:** `0` = clean, `1` = findings above threshold, `2` = error
 
 ---
 
 ### `console`
 
-Metasploit-style interactive REPL for exploit module assessment and payload generation.
+Metasploit-style interactive REPL.
 
 ```bash
 rtosploit console
@@ -710,254 +871,133 @@ rtosploit console
 
 | Command | Description |
 |---------|-------------|
-| `use <module>` | Load a module (e.g. `use freertos/heap_overflow`) |
-| `show options` | List all options for the current module |
-| `show info` | Show module description, CVE, reliability rating |
-| `show modules` | List all registered exploit modules |
-| `set <key> <value>` | Set a module option |
-| `unset <key>` | Clear a module option |
-| `check` | Non-destructive vulnerability probe |
-| `exploit` / `run` | Run the loaded module (assess vulnerability and generate payload) |
-| `back` | Deselect module, return to root prompt |
-| `search <term>` | Search by name, CVE, RTOS, or category |
-| `banner` | Display the ASCII art banner |
-| `version` | Show version string |
-| `help` | Display the command reference |
-| `exit` / `quit` | Exit the console |
-
-**Features:** Tab completion for module paths, option names, and commands. Command history at `~/.config/rtosploit/history`. Type validation for options (int, bool, float, port, path). Rich colored output.
-
-**Example session:**
-```
-rtosploit> search freertos heap
-rtosploit> use freertos/heap_overflow
-rtosploit(freertos/heap_overflow)> show options
-rtosploit(freertos/heap_overflow)> set firmware ./fw.bin
-rtosploit(freertos/heap_overflow)> set machine mps2-an385
-rtosploit(freertos/heap_overflow)> check
-rtosploit(freertos/heap_overflow)> exploit
-rtosploit(freertos/heap_overflow)> back
-rtosploit> exit
-```
+| `use <module>` | Load exploit module |
+| `show options` | List module options |
+| `show info` | Module details |
+| `set <key> <value>` | Set option |
+| `check` | Non-destructive probe |
+| `exploit` / `run` | Generate artifacts |
+| `search <term>` | Search modules |
+| `back` | Deselect module |
+| `exit` | Quit |
 
 ---
 
 ### `payload`
 
-Generate shellcode and ROP chains.
+Shellcode and ROP chain generation.
 
-#### `payload shellcode`
-
-```
-rtosploit payload shellcode --arch ARCH --type TYPE [OPTIONS]
-```
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--arch` | **required** | `armv7m` or `riscv32` |
-| `--type` | **required** | Shellcode type (see below) |
-| `--format` | `hex` | `raw`, `hex`, `c`, `python` |
-| `--encoder` | `raw` | `raw`, `xor`, `nullfree` |
-| `--bad-chars` | none | Hex bytes to avoid (e.g. `000a0d`) |
-| `--length` | `16` | NOP count for `nop_sled` |
-| `--address` | none | Target address for `vtor_redirect` |
-
-**Types:**
-
-| Type | Description |
-|------|-------------|
-| `nop_sled` | Architecture-aware NOP sled (ARM: 2 bytes/NOP, RISC-V: 4 bytes/NOP) |
-| `infinite_loop` | Tight infinite loop (`0xFEE7` on ARM Thumb2) |
-| `mpu_disable` | Write 0 to ARM MPU_CTRL register (`0xE000ED94`) |
-| `vtor_redirect` | Overwrite VTOR at `0xE000ED08` with `--address` value |
-| `register_dump` | Trigger fault to dump register state |
+**Subcommands:** `shellcode`, `rop`
 
 ```bash
-# ARM infinite loop, hex output
+# ARM infinite loop
 rtosploit payload shellcode --arch armv7m --type infinite_loop
-# fee7
 
-# Python format
-rtosploit payload shellcode --arch armv7m --type infinite_loop --format python
-# b'\xfe\xe7'
-
-# C array format
+# MPU disable shellcode as C array
 rtosploit payload shellcode --arch armv7m --type mpu_disable --format c
 
-# RISC-V NOP sled, 8 entries
-rtosploit payload shellcode --arch riscv32 --type nop_sled --length 8
+# RISC-V NOP sled
+rtosploit payload shellcode --arch riscv32 --type nop_sled --length 32
 
-# JSON output
-rtosploit --json payload shellcode --arch armv7m --type infinite_loop
+# ROP chain to disable MPU
+rtosploit payload rop -b firmware.elf --goal mpu_disable
+
+# With bad character filtering
+rtosploit payload rop -b firmware.elf --goal vtor_overwrite --bad-chars 000a0d
 ```
 
-#### `payload rop`
-
-Scan a binary for ROP gadgets and build chains.
-
-```
-rtosploit payload rop --binary PATH [OPTIONS]
-```
-
-| Option | Short | Default | Description |
-|--------|-------|---------|-------------|
-| `--binary` | `-b` | **required** | Binary to scan |
-| `--arch` | | `armv7m` | Architecture |
-| `--goal` | | `mpu_disable` | `mpu_disable`, `vtor_overwrite`, `write_what_where` |
-| `--bad-chars` | | none | Hex bytes to exclude from chain |
-| `--load-addr` | | `0x00000000` | Firmware base address |
-| `--format` | | `hex` | Output format |
-
-```bash
-rtosploit payload rop --binary fw.elf --goal mpu_disable
-rtosploit --json payload rop --binary fw.bin --goal write_what_where
-```
+**Shellcode Types:** `nop_sled`, `infinite_loop`, `mpu_disable`, `vtor_redirect`, `register_dump`
+**ROP Goals:** `mpu_disable`, `vtor_overwrite`, `write_what_where`
+**Formats:** `raw`, `hex`, `c`, `python`
+**Encoders:** `raw`, `xor`, `nullfree`
 
 ---
 
 ### `svd`
 
-Work with CMSIS-SVD peripheral definition files.
-
-#### `svd parse SVD_FILE`
-
-Parse and display peripheral definitions.
+CMSIS-SVD peripheral definition file operations.
 
 ```bash
+# Parse and display
 rtosploit svd parse STM32F407.svd
-rtosploit --json svd parse STM32F407.svd
-```
 
-#### `svd generate SVD_FILE`
+# Download from repository
+rtosploit svd download --device nRF52840
 
-Generate C peripheral handler stubs.
-
-```bash
-rtosploit svd generate STM32F407.svd --output ./stubs --mode fuzzer
-```
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--mode` | `reset-value` | `reset-value`, `read-write`, or `fuzzer` |
-| `--output` | `svd_stubs` | Output directory |
-
-Generates per-peripheral `.c` files and a `peripheral_map.h` mapping table.
-
-#### `svd download`
-
-Download SVD from the CMSIS-SVD GitHub repository.
-
-```bash
-rtosploit svd download --device STM32F407 --output ./svd
-rtosploit svd download --device nRF52840 --output ./svd
+# Generate C stubs
+rtosploit svd generate STM32F407.svd --mode fuzzer --output ./stubs
 ```
 
 ---
 
 ### `vulnrange`
 
-CVE reproduction lab for training and skill development.
-
-#### `vulnrange list`
+CVE reproduction lab with progressive hints.
 
 ```bash
-rtosploit vulnrange list
-rtosploit --json vulnrange list
-```
-
-Table: ID, title, RTOS, difficulty, category, CVSS score.
-
-#### `vulnrange start RANGE_ID`
-
-```bash
-rtosploit vulnrange start CVE-2021-31571
-```
-
-#### `vulnrange hint RANGE_ID`
-
-Progressive hints to guide exploitation.
-
-```bash
-rtosploit vulnrange hint CVE-2021-31571           # General hint
-rtosploit vulnrange hint CVE-2021-31571 --level 2  # Detailed
-rtosploit vulnrange hint CVE-2021-31571 --level 3  # Near-spoiler
-```
-
-#### `vulnrange solve RANGE_ID`
-
-Run the reference exploit solution.
-
-```bash
-rtosploit vulnrange solve CVE-2021-31571
-```
-
-#### `vulnrange writeup RANGE_ID`
-
-Display the full markdown writeup.
-
-```bash
-rtosploit vulnrange writeup CVE-2021-31571
-```
-
-#### `vulnrange verify RANGE_ID`
-
-Check that all challenge assets are present and valid.
-
-```bash
-rtosploit vulnrange verify CVE-2021-31571
+rtosploit vulnrange list                          # List challenges
+rtosploit vulnrange start CVE-2021-43997          # Start a challenge
+rtosploit vulnrange hint CVE-2021-43997 --level 2 # Get a hint
+rtosploit vulnrange solve CVE-2021-43997          # Run reference solution
+rtosploit vulnrange writeup CVE-2021-43997        # Full writeup
 ```
 
 ---
 
-## Exploit Modules
+## 8. Exploit Modules
 
-### FreeRTOS
+### FreeRTOS (6 modules)
+
+| Module | Category | CVE | Description |
+|--------|----------|-----|-------------|
+| `freertos/heap_overflow` | Heap Corruption | — | BlockLink_t unlink → arbitrary write to TCB pxTopOfStack |
+| `freertos/tcb_overwrite` | Memory Corruption | — | Direct pxTopOfStack overwrite via write primitive |
+| `freertos/isr_hijack` | ISR Hijacking | — | VTOR exception vector redirection (SVC/PendSV/SysTick) |
+| `freertos/mpu_bypass` | MPU Bypass | CVE-2021-43997 | xPortRaisePrivilege() callable from unprivileged (v10.2–10.4.5) |
+| `freertos/mpu_bypass_rop` | MPU + ROP | CVE-2024-28115 | Stack overflow ROP chain to disable MPU (v10.0–10.6.1) |
+| `freertos/tcp_stack` | Network | CVE-2018-16525, CVE-2025-5688 | DNS/LLMNR response overflow |
+
+### ThreadX (3 modules)
 
 | Module | Category | Description |
 |--------|----------|-------------|
-| `freertos/heap_overflow` | Heap Corruption | Overflow into adjacent heap block headers to corrupt task management structures |
-| `freertos/tcb_overwrite` | Memory Corruption | Overwrite the Task Control Block to redirect execution or escalate privileges |
-| `freertos/mpu_bypass` | MPU | Bypass MPU protections via misconfigured region permissions |
-| `freertos/mpu_bypass_rop` | MPU / ROP | ROP chain-based MPU bypass for use when direct writes are blocked |
-| `freertos/isr_hijack` | ISR | Hijack the Interrupt Service Routine table to redirect interrupt handling |
-| `freertos/tcp_stack` | Network | Exploit FreeRTOS+TCP stack vulnerabilities |
+| `threadx/byte_pool` | Heap Corruption | TX_BYTE_POOL unlink → arbitrary write to thread entry |
+| `threadx/kom` | Kernel | Kernel Object Masquerading — syscall chaining (USENIX Security 2025) |
+| `threadx/thread_entry` | Code Execution | Direct tx_thread_entry function pointer overwrite |
 
-### ThreadX
+### Zephyr (6 modules)
 
-| Module | Category | Description |
-|--------|----------|-------------|
-| `threadx/byte_pool` | Heap Corruption | Exploit the ThreadX byte pool allocator for arbitrary write |
-| `threadx/kom` | Kernel | Kernel Object Manipulation — corrupt internal control structures |
-| `threadx/thread_entry` | Code Execution | Redirect thread entry points to attacker-controlled code |
-
-### Zephyr
-
-| Module | Category | CVE |
-|--------|----------|-----|
-| `zephyr/ble_overflow` | Bluetooth LE | — |
-| `zephyr/ble_cve_2023_4264` | Bluetooth LE | CVE-2023-4264 |
-| `zephyr/ble_cve_2024_6135` | Bluetooth LE | CVE-2024-6135 |
-| `zephyr/ble_cve_2024_6442` | Bluetooth LE | CVE-2024-6442 |
-| `zephyr/syscall_race` | Race Condition | — |
-| `zephyr/userspace_off` | Boundary Bypass | — |
+| Module | Category | CVE | Description |
+|--------|----------|-----|-------------|
+| `zephyr/ble_overflow` | BLE | CVE-2024-6259 | Extended advertising report heap overflow (<3.7.0) |
+| `zephyr/ble_cve_2023_4264` | BLE | CVE-2023-4264 | BT Classic L2CAP overflow (<3.5.0) |
+| `zephyr/ble_cve_2024_6135` | BLE | CVE-2024-6135 | Missing bounds in BT processing (<3.7.0) |
+| `zephyr/ble_cve_2024_6442` | BLE | CVE-2024-6442 | ASCS global buffer overflow (<3.7.0) |
+| `zephyr/syscall_race` | Race Condition | GHSA-3r6j-5mp3-75wr | SVC handler TOCTOU (<4.3.0) |
+| `zephyr/userspace_off` | Reconnaissance | — | Detects CONFIG_USERSPACE=n |
 
 ---
 
-## Machine Configurations
+## 9. Machine Configurations
 
-Machine definitions live in `configs/machines/` as YAML files. Use the filename stem as the `--machine` argument.
+Machine YAML files in `configs/machines/`. Use the filename stem as `--machine`:
 
-| Machine | QEMU Target | CPU | Architecture |
-|---------|-------------|-----|--------------|
-| `mps2-an385` | MPS2 AN385 | Cortex-M3 | armv7m |
-| `mps2-an505` | MPS2 AN505 | Cortex-M33 | armv8m |
-| `stm32f4` | STM32F4 | Cortex-M4 | armv7m |
+| Machine | QEMU Target | CPU | Architecture | Use Case |
+|---------|-------------|-----|-------------|----------|
+| `mps2-an385` | MPS2 AN385 | Cortex-M3 | armv7m | Generic ARM testing (default) |
+| `mps2-an505` | MPS2 AN505 | Cortex-M33 | armv8m | TrustZone-enabled testing |
+| `stm32f4` | STM32VLDISCOVERY | Cortex-M4 | armv7m | STM32 HAL firmware |
+| `microbit` | micro:bit | Cortex-M0 | armv6m | nRF51/nRF52 firmware |
+| `lm3s6965evb` | LM3S6965EVB | Cortex-M3 | armv7m | TI Stellaris firmware |
+| `netduinoplus2` | Netduino Plus 2 | Cortex-M4 | armv7m | STM32F4-based boards |
+| `musca-a` | Musca-A | Cortex-M33 | armv8m | ARMv8-M TrustZone |
+| `sifive_e` | SiFive E | E31 | riscv32 | RISC-V testing |
+| `sifive_u` | SiFive U | U54 | riscv64 | RISC-V 64-bit |
 
 ### Adding a Custom Machine
 
-Drop a YAML file in `configs/machines/<name>.yaml`:
-
 ```yaml
+# configs/machines/my-board.yaml
 machine:
   name: my-board
   qemu_machine: mps2-an385
@@ -981,19 +1021,18 @@ peripherals:
 
 ---
 
-## Configuration File
+## 10. Configuration
 
-RTOSploit loads configuration in precedence order (later overrides earlier):
+RTOSploit loads config in precedence order (later overrides earlier):
 
 1. Built-in defaults
 2. `~/.config/rtosploit/config.yaml` — user-wide
-3. `.rtosploit.yaml` — project-level (current directory)
+3. `.rtosploit.yaml` — project-level
 4. `--config PATH` — explicit override
 5. CLI flags — highest priority
 
-**Example `.rtosploit.yaml`:**
-
 ```yaml
+# .rtosploit.yaml
 qemu:
   binary: /usr/local/bin/qemu-system-arm
   timeout: 30
@@ -1005,26 +1044,19 @@ output:
   format: json
   color: true
 
-logging:
-  level: info
-
 fuzzer:
   default_timeout: 120
   jobs: 2
 ```
 
-**Environment variables** use the `RTOSPLOIT_` prefix:
-
+Environment variables use `RTOSPLOIT_` prefix:
 ```bash
-RTOSPLOIT_QEMU_BINARY=/opt/qemu/bin/qemu-system-arm \
-  rtosploit emulate --firmware fw.bin --machine mps2-an385
+RTOSPLOIT_QEMU_BINARY=/opt/qemu/bin/qemu-system-arm rtosploit emulate -f fw.elf -m mps2-an385
 ```
 
 ---
 
-## CI/CD Integration
-
-See [docs/ci-integration.md](docs/ci-integration.md) for GitHub Actions, GitLab CI, Docker, Makefile, and JSON scripting examples.
+## 11. CI/CD Integration
 
 ### GitHub Actions
 
@@ -1037,190 +1069,262 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install QEMU
-        run: sudo apt install -y qemu-system-arm
-
-      - name: Install RTOSploit
-        run: pip install -e .
-
-      - name: Run security scan
-        run: |
+      - run: sudo apt install -y qemu-system-arm
+      - run: pip install -e .
+      - run: |
           rtosploit scan \
-            --firmware firmware.bin \
-            --machine mps2-an385 \
+            -f firmware.elf \
             --fuzz-timeout 120 \
             --format sarif \
             --output scan-output \
             --fail-on high
-
-      - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@v3
+      - uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: scan-output/report.sarif.json
-        if: always()
-
-      - name: Save artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: security-report
-          path: scan-output/
         if: always()
 ```
 
 ### GitLab CI
 
 ```yaml
-firmware-security-scan:
+firmware-scan:
   image: python:3.12
   before_script:
     - apt-get update && apt-get install -y qemu-system-arm
     - pip install -e .
   script:
-    - rtosploit scan
-        --firmware firmware.bin
-        --machine mps2-an385
-        --fuzz-timeout 60
-        --output scan-output
-        --fail-on critical
+    - rtosploit scan -f firmware.elf --fuzz-timeout 60 --output scan-output --fail-on critical
   artifacts:
-    paths:
-      - scan-output/
+    paths: [scan-output/]
     reports:
       sast: scan-output/report.sarif.json
-  allow_failure: false
 ```
 
-### Makefile Integration
+### Makefile
 
 ```makefile
-.PHONY: security-scan
-
 security-scan:
-	rtosploit scan \
-		--firmware $(FIRMWARE) \
-		--machine mps2-an385 \
-		--fuzz-timeout $(FUZZ_TIMEOUT) \
-		--output scan-output \
-		--fail-on high
+	rtosploit scan -f $(FIRMWARE) --fuzz-timeout $(FUZZ_TIMEOUT) --output scan-output --fail-on high
 ```
+
+See [docs/ci-integration.md](docs/ci-integration.md) for Docker, JSON scripting, and advanced examples.
 
 ---
 
-## Development
+## 12. Development
 
 ### Running Tests
 
 ```bash
-# All unit tests
-.venv/bin/python -m pytest tests/unit/ -v
-
-# Specific test file
-.venv/bin/python -m pytest tests/unit/test_interactive.py -v
-
-# With coverage report
-.venv/bin/python -m pytest tests/unit/ --cov=rtosploit --cov-report=html
+python -m pytest tests/unit/ -v                    # All tests
+python -m pytest tests/unit/test_analysis.py -v    # Specific file
+python -m pytest tests/unit/ --cov=rtosploit       # With coverage
 ```
-
-### Writing an Exploit Module
-
-See the full guide: [docs/writing-exploits.md](docs/writing-exploits.md)
-
-1. Create `rtosploit/exploits/<rtos>/my_exploit.py`
-2. Subclass `ExploitModule` from `rtosploit.exploits.base`
-3. Set class attributes: `name`, `description`, `rtos`, `category`, `reliability`
-4. Implement abstract methods: `check()`, `exploit()`, `requirements()`, `cleanup()`
-5. Register options in `register_options()` with `self.add_option()`
-
-The registry auto-discovers all modules in `rtosploit/exploits/`.
-
-### Adding a New CLI Command
-
-1. Create `rtosploit/cli/commands/my_command.py` with a Click command named `my_command`
-2. Import and register in `rtosploit/cli/main.py`:
-   ```python
-   from rtosploit.cli.commands.my_command import my_command
-   cli.add_command(my_command)
-   ```
 
 ### Project Layout
 
 ```
 rtosploit/
-├── cli/
-│   ├── main.py              Entry point, global flags, routing
-│   └── commands/            One file per subcommand
-├── interactive/
-│   ├── app.py               Menu loop and dispatch
-│   ├── banner.py            Rich ASCII banner
-│   ├── menus.py             questionary menu definitions
-│   ├── session.py           FirmwareContext + InteractiveSession
-│   ├── firmware_loader.py   Load, fingerprint, display, machine selection
-│   ├── dashboard.py         Shared live fuzzer dashboard
-│   └── handlers/            One handler per firmware-menu action
-├── exploits/
-│   ├── base.py              ExploitModule ABC, ExploitOption, ExploitResult
-│   ├── registry.py          Dynamic module discovery
-│   ├── runner.py            Assessment orchestration
-│   ├── freertos/            6 FreeRTOS modules
-│   ├── threadx/             3 ThreadX modules
-│   └── zephyr/              6 Zephyr modules
-├── analysis/
-│   ├── fingerprint.py       RTOS type + version detection
-│   ├── heap_detect.py       Heap allocator identification
-│   ├── mpu_check.py         ARM MPU analysis
-│   └── strings.py           String extraction
-├── cve/
-│   ├── database.py          JSON-backed CVE store
-│   ├── correlator.py        RTOS fingerprint → CVE matching
-│   └── nvd_client.py        NIST NVD API client
-├── coverage/
-│   ├── bitmap_reader.py     AFL bitmap parsing
-│   ├── mapper.py            Address-level coverage mapping
-│   └── visualizer.py        Terminal and HTML rendering
-├── payloads/
-│   ├── shellcode.py         Template generator (ARM + RISC-V)
-│   └── rop.py               Gadget finder + chain builder
-├── emulation/
-│   ├── qemu.py              QEMU process lifecycle
-│   ├── qmp.py               QEMU Machine Protocol client
-│   ├── gdb.py               GDB stub integration
-│   └── machines.py          Machine YAML loading
-├── triage/
-│   ├── pipeline.py          Load → classify → minimize → sort
-│   └── classifier.py        Exploitability scoring
-├── ci/
-│   └── pipeline.py          Full scan orchestration
-├── reporting/
-│   ├── models.py            Finding + EngagementReport dataclasses
-│   ├── sarif.py             SARIF generator
-│   └── html.py              HTML dashboard generator
-└── console/
-    ├── repl.py              Metasploit-style REPL
-    └── state.py             ConsoleState
+├── cli/                        CLI entry point and subcommands
+│   ├── main.py                 Global flags, command routing
+│   └── commands/               One file per subcommand (14 commands)
+├── analysis/                   Static firmware analysis
+│   ├── fingerprint.py          RTOS type + version detection
+│   ├── heap_detect.py          Heap allocator identification
+│   ├── mpu_check.py            ARM MPU region analysis
+│   ├── strings.py              String extraction
+│   └── detection/              6-layer peripheral detection engine (11 files)
+├── peripherals/                Peripheral modeling and rehosting
+│   ├── auto_config.py          Fingerprint → PeripheralConfig generator
+│   ├── hal_database.py         112 HAL function entries (STM32/nRF5/Zephyr)
+│   ├── svd_model.py            CMSIS-SVD data model
+│   ├── svd_parser.py           SVD XML parser with derivedFrom, dim arrays
+│   ├── svd_cache.py            SVD download/cache (multi-URL fallback)
+│   ├── rehost.py               RehostingEngine with auto_mode
+│   ├── dispatcher.py           GDB breakpoint-based function interception
+│   ├── mmio_intercept.py       GDB watchpoint-based MMIO interception
+│   ├── unicorn_engine.py       Unicorn-based alternative engine
+│   ├── interrupt_injector.py   NVIC interrupt injection
+│   └── models/                 Vendor HAL implementations
+│       ├── stm32_hal.py        STM32 UART/SPI/I2C/GPIO/RCC/Flash/Timer
+│       ├── nrf5_hal.py         nRF5 UART/SPI/TWI/GPIO/BLE/Timer
+│       ├── zephyr_hal.py       Zephyr UART/SPI/I2C/GPIO/BLE
+│       ├── svd_peripheral.py   SVD register-level model
+│       ├── mmio_fallback.py    Smart MMIO fallback + system registers
+│       └── generic.py          ReturnZero, ReturnValue, LogAndReturn
+├── exploits/                   Exploit assessment framework
+│   ├── base.py                 ExploitModule ABC
+│   ├── registry.py             Auto-discovery
+│   ├── runner.py               Assessment orchestration
+│   ├── runtime_bridge.py       GDB-based payload injection
+│   ├── freertos/               6 FreeRTOS modules
+│   ├── threadx/                3 ThreadX modules
+│   └── zephyr/                 6 Zephyr modules
+├── fuzzing/                    Grey-box fuzzing engine
+│   ├── engine.py               Multi-worker orchestration
+│   ├── corpus.py               Seed corpus management
+│   ├── mutator.py              Input mutation
+│   ├── crash_reporter.py       Dedup (PC + CFSR + backtrace)
+│   └── input_injector.py       HAL-based fuzz input routing
+├── emulation/                  QEMU orchestration
+│   ├── qemu.py                 Process lifecycle
+│   ├── qmp.py                  QEMU Machine Protocol
+│   ├── gdb.py                  GDB stub integration
+│   └── machines.py             Machine YAML loading
+├── cve/                        CVE intelligence
+│   ├── database.py             JSON CVE store
+│   ├── correlator.py           RTOS → CVE matching
+│   └── nvd_client.py           NVD API (with retry backoff)
+├── triage/                     Crash classification
+│   ├── pipeline.py             Load → classify → minimize
+│   ├── classifier.py           Exploitability scoring
+│   └── minimizer.py            Input minimization
+├── payloads/                   Payload generation
+│   ├── shellcode.py            ARM + RISC-V templates
+│   └── rop.py                  Gadget finder + chain builder
+├── coverage/                   Coverage analysis
+│   ├── bitmap_reader.py        AFL bitmap parsing
+│   ├── mapper.py               Address-level mapping
+│   └── visualizer.py           Terminal + HTML rendering
+├── reporting/                  Report generation
+│   ├── models.py               Finding + Report dataclasses
+│   ├── sarif.py                SARIF 2.1.0 generator
+│   └── html.py                 HTML dashboard
+├── console/                    Metasploit-style REPL
+├── interactive/                Arrow-key TUI
+├── ci/                         Scan pipeline orchestration
+└── vulnrange/                  CVE reproduction labs
+```
+
+### Writing an Exploit Module
+
+See [docs/writing-exploits.md](docs/writing-exploits.md). Quick template:
+
+```python
+from rtosploit.exploits.base import ExploitModule, ExploitResult
+
+class MyExploit(ExploitModule):
+    name = "my_exploit"
+    description = "Description of vulnerability"
+    rtos = "freertos"
+    category = "heap_corruption"
+    reliability = "medium"
+
+    def check(self, target, payload=None):
+        # Return True if vulnerable
+        ...
+
+    def exploit(self, target, payload=None):
+        # Generate and return ExploitResult with artifacts
+        ...
+
+    def requirements(self):
+        return {"symbols": True, "version": ">=10.0.0"}
+
+    def cleanup(self, target):
+        pass
 ```
 
 ---
 
-## Documentation
+## 13. Troubleshooting
 
-Detailed documentation lives in the [`docs/`](docs/) directory:
+### QEMU not found
+
+```
+Error: QEMU binary not found
+```
+
+Install QEMU 9.0+ and ensure `qemu-system-arm` is in your PATH:
+```bash
+qemu-system-arm --version
+```
+
+On macOS: `brew install qemu`. On Ubuntu: `sudo apt install qemu-system-arm`.
+
+### SVD download fails (404)
+
+```
+ERROR: Failed to download SVD from https://...
+```
+
+The CMSIS-SVD GitHub repository URLs change periodically. RTOSploit tries multiple fallback URLs automatically. If all fail:
+1. Download the SVD manually from [cmsis-svd](https://github.com/cmsis-svd/cmsis-svd-data)
+2. Use `--svd /path/to/file.svd` to provide it directly
+
+### Auto-rehost doesn't detect peripherals
+
+- Run `rtosploit analyze -f firmware.elf --detect-peripherals` to see what was detected
+- Stripped binaries rely on the register MMIO layer (Capstone disassembly) — this requires executable sections
+- If confidence is LOW, the firmware may use unusual HAL patterns not in the 112-function database
+
+### Fuzzer reports 0 exec/sec
+
+- Ensure firmware actually boots (try `rtosploit emulate -f firmware.elf -m mps2-an385` first)
+- Check QEMU machine compatibility — wrong machine = firmware hangs at boot
+- Try `--auto` mode which auto-selects the machine
+
+### Exploit check says "not_vulnerable" but CVE matches
+
+Exploit modules assess specific binary patterns (symbols, heap metadata layout, version strings). A CVE match based on version doesn't guarantee the specific vulnerable code path is present in your build — the vendor may have backported the fix.
+
+### Import errors (capstone, pyelftools)
+
+```bash
+pip install -e ".[dev]"  # Reinstall with all dependencies
+```
+
+For Xtensa architecture support, ensure Capstone 5.0+ is installed. Some distributions ship older versions.
+
+### Unicorn engine not available
+
+```
+ImportError: unicorn package not installed
+```
+
+The Unicorn engine is optional. Install with `pip install unicorn` for the `--engine unicorn` option. QEMU mode works without it.
+
+### Permission denied on QMP socket
+
+RTOSploit creates temporary sockets in a secure temp directory. If you see permission errors:
+- Check `/tmp` has write permissions
+- On Docker, ensure the container has tmpfs access
+- Set `$TMPDIR` to an alternative location if needed
+
+### Large firmware causes timeouts
+
+The signature detection layer caps scanning at 512KB per executable section. For firmware >1MB, detection may be incomplete. Use `--svd` to provide peripheral definitions directly.
+
+### Tests fail after upgrade
+
+```bash
+# Clean and reinstall
+pip install -e ".[dev]" --force-reinstall
+
+# Run specific test to diagnose
+python -m pytest tests/unit/test_analysis.py -v -x
+```
+
+---
+
+## 14. Documentation
+
+Detailed docs in the [`docs/`](docs/) directory:
 
 | Document | Description |
 |----------|-------------|
-| [Architecture](docs/architecture.md) | System design, module dependency map, and Mermaid data-flow diagrams |
-| [Installation](docs/installation.md) | Full requirements, QEMU setup, Rust fuzzer build, NVD API key |
-| [Quick Start](docs/quickstart.md) | Step-by-step interactive walkthrough and CLI equivalents |
-| [CI Integration](docs/ci-integration.md) | GitHub Actions, GitLab CI, Makefile, Docker, JSON scripting |
-| [Writing Exploit Modules](docs/writing-exploits.md) | `ExploitModule` subclass template, option types, testing |
-| [Writing VulnRange Labs](docs/writing-vulnranges.md) | Lab directory layout, `manifest.yaml` schema, hint conventions |
-| [Crash Triage](docs/crash-triage.md) | CFSR register flags, exploitability classification, minimization |
-| [CVE Correlation](docs/cve-correlation.md) | Database schema, matching logic, NVD sync, offline operation |
-| [Coverage](docs/coverage.md) | AFL bitmap format, terminal/HTML views, improving coverage |
-| [Reporting](docs/reporting.md) | SARIF structure, HTML dashboard, IDE integration, data model |
+| [Installation](docs/installation.md) | Full platform setup: QEMU, Python, Rust fuzzer, NVD API key |
+| [Quick Start](docs/quickstart.md) | Step-by-step walkthrough |
+| [CI Integration](docs/ci-integration.md) | GitHub Actions, GitLab CI, Docker, Makefile |
+| [Writing Exploits](docs/writing-exploits.md) | Module template, options, testing |
+| [Writing VulnRanges](docs/writing-vulnranges.md) | Lab layout, manifest schema, hints |
+| [Crash Triage](docs/crash-triage.md) | CFSR flags, exploitability, minimization |
+| [CVE Correlation](docs/cve-correlation.md) | Database schema, matching, NVD sync |
+| [Coverage](docs/coverage.md) | AFL bitmap format, visualization |
+| [Reporting](docs/reporting.md) | SARIF structure, HTML dashboard, IDE integration |
 
 ---
 
 ## License
 
-GPL-3.0-only. See `LICENSE` for details.
+GPL-3.0-only. See [LICENSE](LICENSE) for details.
