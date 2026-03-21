@@ -151,10 +151,7 @@ impl FuzzHarness for QemuHarness {
 
     fn setup(&mut self, config: &HarnessConfig) -> anyhow::Result<()> {
         if !config.firmware_path.exists() {
-            anyhow::bail!(
-                "firmware not found: {}",
-                config.firmware_path.display()
-            );
+            anyhow::bail!("firmware not found: {}", config.firmware_path.display());
         }
         self.config = Some(config.clone());
         log::info!(

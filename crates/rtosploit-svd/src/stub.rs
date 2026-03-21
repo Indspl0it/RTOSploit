@@ -39,7 +39,12 @@ pub fn generate_peripheral_stub(peripheral: &Peripheral, mode: StubMode) -> Stri
     writeln!(out, "/*").unwrap();
     writeln!(out, " * RTOSploit-generated QEMU peripheral stub").unwrap();
     writeln!(out, " * Peripheral: {}", peripheral.name).unwrap();
-    writeln!(out, " * Base: 0x{:08x}  Size: 0x{:x}", peripheral.base_address, peripheral.size).unwrap();
+    writeln!(
+        out,
+        " * Base: 0x{:08x}  Size: 0x{:x}",
+        peripheral.base_address, peripheral.size
+    )
+    .unwrap();
     writeln!(out, " * Mode: {:?}", mode).unwrap();
     writeln!(out, " * AUTO-GENERATED — DO NOT EDIT MANUALLY").unwrap();
     writeln!(out, " */").unwrap();
@@ -54,7 +59,12 @@ pub fn generate_peripheral_stub(peripheral: &Peripheral, mode: StubMode) -> Stri
     let type_name = format!("TYPE_RTOSPLOIT_{}", pname_upper);
     let state_name = format!("RTOSploit{}State", pname);
     writeln!(out, "#define {} \"rtosploit-{}\"", type_name, pname_lower).unwrap();
-    writeln!(out, "OBJECT_DECLARE_SIMPLE_TYPE({}, RTOSploit{})", state_name, pname).unwrap();
+    writeln!(
+        out,
+        "OBJECT_DECLARE_SIMPLE_TYPE({}, RTOSploit{})",
+        state_name, pname
+    )
+    .unwrap();
     writeln!(out).unwrap();
 
     // State struct
@@ -67,11 +77,19 @@ pub fn generate_peripheral_stub(peripheral: &Peripheral, mode: StubMode) -> Stri
             // One uint32_t field per register
             for reg in &peripheral.registers {
                 let rname = sanitize_name(&reg.name).to_lowercase();
-                writeln!(out, "    uint32_t reg_{};  /* offset 0x{:x}, reset 0x{:x} */",
-                    rname, reg.address_offset, reg.reset_value).unwrap();
+                writeln!(
+                    out,
+                    "    uint32_t reg_{};  /* offset 0x{:x}, reset 0x{:x} */",
+                    rname, reg.address_offset, reg.reset_value
+                )
+                .unwrap();
             }
             if matches!(mode, StubMode::FuzzerDriven) {
-                writeln!(out, "    /* fuzzer input buffer pointer (set externally) */").unwrap();
+                writeln!(
+                    out,
+                    "    /* fuzzer input buffer pointer (set externally) */"
+                )
+                .unwrap();
                 writeln!(out, "    uint8_t *fuzz_buf;").unwrap();
                 writeln!(out, "    size_t fuzz_buf_pos;").unwrap();
                 writeln!(out, "    size_t fuzz_buf_len;").unwrap();
@@ -86,8 +104,12 @@ pub fn generate_peripheral_stub(peripheral: &Peripheral, mode: StubMode) -> Stri
     writeln!(out).unwrap();
 
     // Read handler
-    writeln!(out, "static uint64_t {}_read(void *opaque, hwaddr addr, unsigned size)",
-        pname_lower).unwrap();
+    writeln!(
+        out,
+        "static uint64_t {}_read(void *opaque, hwaddr addr, unsigned size)",
+        pname_lower
+    )
+    .unwrap();
     writeln!(out, "{{").unwrap();
 
     match mode {
@@ -95,14 +117,22 @@ pub fn generate_peripheral_stub(peripheral: &Peripheral, mode: StubMode) -> Stri
             writeln!(out, "    switch (addr) {{").unwrap();
             for reg in &peripheral.registers {
                 if reg.access.readable() {
-                    writeln!(out, "    case 0x{:x}: /* {} */ return 0x{:x};",
-                        reg.address_offset, reg.name, reg.reset_value).unwrap();
+                    writeln!(
+                        out,
+                        "    case 0x{:x}: /* {} */ return 0x{:x};",
+                        reg.address_offset, reg.name, reg.reset_value
+                    )
+                    .unwrap();
                 }
             }
             writeln!(out, "    default:").unwrap();
             writeln!(out, "        qemu_log_mask(LOG_UNIMP,").unwrap();
-            writeln!(out, "            \"{}: unimplemented read at offset 0x%\" HWADDR_PRIx \"\\n\",",
-                peripheral.name).unwrap();
+            writeln!(
+                out,
+                "            \"{}: unimplemented read at offset 0x%\" HWADDR_PRIx \"\\n\",",
+                peripheral.name
+            )
+            .unwrap();
             writeln!(out, "            addr);").unwrap();
             writeln!(out, "        return 0;").unwrap();
             writeln!(out, "    }}").unwrap();
@@ -113,24 +143,44 @@ pub fn generate_peripheral_stub(peripheral: &Peripheral, mode: StubMode) -> Stri
             for reg in &peripheral.registers {
                 if reg.access.readable() {
                     let rname = sanitize_name(&reg.name).to_lowercase();
-                    writeln!(out, "    case 0x{:x}: return s->reg_{};",
-                        reg.address_offset, rname).unwrap();
+                    writeln!(
+                        out,
+                        "    case 0x{:x}: return s->reg_{};",
+                        reg.address_offset, rname
+                    )
+                    .unwrap();
                 }
             }
             writeln!(out, "    default:").unwrap();
             writeln!(out, "        qemu_log_mask(LOG_UNIMP,").unwrap();
-            writeln!(out, "            \"{}: unimplemented read at 0x%\" HWADDR_PRIx \"\\n\",",
-                peripheral.name).unwrap();
+            writeln!(
+                out,
+                "            \"{}: unimplemented read at 0x%\" HWADDR_PRIx \"\\n\",",
+                peripheral.name
+            )
+            .unwrap();
             writeln!(out, "            addr);").unwrap();
             writeln!(out, "        return 0;").unwrap();
             writeln!(out, "    }}").unwrap();
         }
         StubMode::FuzzerDriven => {
             writeln!(out, "    {} *s = opaque;", state_name).unwrap();
-            writeln!(out, "    /* fuzzer-driven: consume bytes from fuzz input */").unwrap();
+            writeln!(
+                out,
+                "    /* fuzzer-driven: consume bytes from fuzz input */"
+            )
+            .unwrap();
             writeln!(out, "    uint32_t val = 0;").unwrap();
-            writeln!(out, "    if (s->fuzz_buf && s->fuzz_buf_pos + 4 <= s->fuzz_buf_len) {{").unwrap();
-            writeln!(out, "        memcpy(&val, s->fuzz_buf + s->fuzz_buf_pos, 4);").unwrap();
+            writeln!(
+                out,
+                "    if (s->fuzz_buf && s->fuzz_buf_pos + 4 <= s->fuzz_buf_len) {{"
+            )
+            .unwrap();
+            writeln!(
+                out,
+                "        memcpy(&val, s->fuzz_buf + s->fuzz_buf_pos, 4);"
+            )
+            .unwrap();
             writeln!(out, "        s->fuzz_buf_pos += 4;").unwrap();
             writeln!(out, "    }}").unwrap();
             writeln!(out, "    (void)addr;  /* address ignored in fuzzer mode */").unwrap();
@@ -141,16 +191,24 @@ pub fn generate_peripheral_stub(peripheral: &Peripheral, mode: StubMode) -> Stri
     writeln!(out).unwrap();
 
     // Write handler
-    writeln!(out, "static void {}_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)",
-        pname_lower).unwrap();
+    writeln!(
+        out,
+        "static void {}_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)",
+        pname_lower
+    )
+    .unwrap();
     writeln!(out, "{{").unwrap();
 
     match mode {
         StubMode::ResetValue | StubMode::FuzzerDriven => {
             writeln!(out, "    /* writes silently accepted */").unwrap();
             writeln!(out, "    qemu_log_mask(LOG_UNIMP,").unwrap();
-            writeln!(out, "        \"{}: write 0x%\" PRIx64 \" at 0x%\" HWADDR_PRIx \"\\n\",",
-                peripheral.name).unwrap();
+            writeln!(
+                out,
+                "        \"{}: write 0x%\" PRIx64 \" at 0x%\" HWADDR_PRIx \"\\n\",",
+                peripheral.name
+            )
+            .unwrap();
             writeln!(out, "        val, addr);").unwrap();
         }
         StubMode::ReadWrite => {
@@ -159,14 +217,22 @@ pub fn generate_peripheral_stub(peripheral: &Peripheral, mode: StubMode) -> Stri
             for reg in &peripheral.registers {
                 if reg.access.writable() {
                     let rname = sanitize_name(&reg.name).to_lowercase();
-                    writeln!(out, "    case 0x{:x}: s->reg_{} = (uint32_t)val; break;",
-                        reg.address_offset, rname).unwrap();
+                    writeln!(
+                        out,
+                        "    case 0x{:x}: s->reg_{} = (uint32_t)val; break;",
+                        reg.address_offset, rname
+                    )
+                    .unwrap();
                 }
             }
             writeln!(out, "    default:").unwrap();
             writeln!(out, "        qemu_log_mask(LOG_UNIMP,").unwrap();
-            writeln!(out, "            \"{}: unimplemented write at 0x%\" HWADDR_PRIx \"\\n\",",
-                peripheral.name).unwrap();
+            writeln!(
+                out,
+                "            \"{}: unimplemented write at 0x%\" HWADDR_PRIx \"\\n\",",
+                peripheral.name
+            )
+            .unwrap();
             writeln!(out, "            addr);").unwrap();
             writeln!(out, "    }}").unwrap();
         }
@@ -192,8 +258,12 @@ pub fn generate_peripheral_stub(peripheral: &Peripheral, mode: StubMode) -> Stri
             writeln!(out, "    {} *s = RTOSploit{}(dev);", state_name, pname).unwrap();
             for reg in &peripheral.registers {
                 let rname = sanitize_name(&reg.name).to_lowercase();
-                writeln!(out, "    s->reg_{} = 0x{:x};  /* {} reset value */",
-                    rname, reg.reset_value, reg.name).unwrap();
+                writeln!(
+                    out,
+                    "    s->reg_{} = 0x{:x};  /* {} reset value */",
+                    rname, reg.reset_value, reg.name
+                )
+                .unwrap();
             }
         }
         _ => {
@@ -204,17 +274,38 @@ pub fn generate_peripheral_stub(peripheral: &Peripheral, mode: StubMode) -> Stri
     writeln!(out).unwrap();
 
     // Realize function
-    writeln!(out, "static void {}_realize(DeviceState *dev, Error **errp)", pname_lower).unwrap();
+    writeln!(
+        out,
+        "static void {}_realize(DeviceState *dev, Error **errp)",
+        pname_lower
+    )
+    .unwrap();
     writeln!(out, "{{").unwrap();
     writeln!(out, "    {} *s = RTOSploit{}(dev);", state_name, pname).unwrap();
-    writeln!(out, "    memory_region_init_io(&s->mmio, OBJECT(s), &{}_ops, s,", pname_lower).unwrap();
-    writeln!(out, "        \"{}\", 0x{:x});", peripheral.name, peripheral.size.max(0x400)).unwrap();
+    writeln!(
+        out,
+        "    memory_region_init_io(&s->mmio, OBJECT(s), &{}_ops, s,",
+        pname_lower
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "        \"{}\", 0x{:x});",
+        peripheral.name,
+        peripheral.size.max(0x400)
+    )
+    .unwrap();
     writeln!(out, "    sysbus_init_mmio(SYS_BUS_DEVICE(s), &s->mmio);").unwrap();
     writeln!(out, "}}").unwrap();
     writeln!(out).unwrap();
 
     // class_init and type_init
-    writeln!(out, "static void {}_class_init(ObjectClass *klass, void *data)", pname_lower).unwrap();
+    writeln!(
+        out,
+        "static void {}_class_init(ObjectClass *klass, void *data)",
+        pname_lower
+    )
+    .unwrap();
     writeln!(out, "{{").unwrap();
     writeln!(out, "    DeviceClass *dc = DEVICE_CLASS(klass);").unwrap();
     writeln!(out, "    dc->realize = {}_realize;", pname_lower).unwrap();
@@ -304,7 +395,10 @@ mod tests {
     fn test_reset_value_stub_contains_case() {
         let uart = make_uart();
         let stub = generate_peripheral_stub(&uart, StubMode::ResetValue);
-        assert!(stub.contains("case 0x0:"), "Should have case for DR at offset 0");
+        assert!(
+            stub.contains("case 0x0:"),
+            "Should have case for DR at offset 0"
+        );
         assert!(stub.contains("0x20"), "SR reset value 0x20 should appear");
         assert!(stub.contains("UART0"));
     }
@@ -315,7 +409,10 @@ mod tests {
         let stub = generate_peripheral_stub(&uart, StubMode::ReadWrite);
         assert!(stub.contains("reg_dr"), "Should have reg_dr field");
         assert!(stub.contains("reg_sr"), "Should have reg_sr field");
-        assert!(stub.contains("s->reg_dr"), "Should access via state pointer");
+        assert!(
+            stub.contains("s->reg_dr"),
+            "Should access via state pointer"
+        );
     }
 
     #[test]
@@ -341,6 +438,9 @@ mod tests {
         // SR is read-only, should not appear in write handler switch
         // The write handler should have case 0x0 (DR) but not case 0x4 (SR)
         let write_section = stub.split("_write").nth(1).unwrap_or("");
-        assert!(!write_section.contains("case 0x4:"), "Read-only SR should not be in write handler");
+        assert!(
+            !write_section.contains("case 0x4:"),
+            "Read-only SR should not be in write handler"
+        );
     }
 }

@@ -32,7 +32,10 @@ impl CoverageBitmap {
 
     /// Returns `true` if any edge in `self` is not present in `global`.
     pub fn has_new_coverage(&self, global: &Self) -> bool {
-        self.data.iter().zip(global.data.iter()).any(|(&s, &g)| s != 0 && g == 0)
+        self.data
+            .iter()
+            .zip(global.data.iter())
+            .any(|(&s, &g)| s != 0 && g == 0)
     }
 
     /// OR `self` into `global` (adds new edges to the global bitmap).
@@ -69,7 +72,9 @@ impl CoverageBitmap {
 }
 
 impl Default for CoverageBitmap {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 // ── Edge ID computation ───────────────────────────────────────────────────────

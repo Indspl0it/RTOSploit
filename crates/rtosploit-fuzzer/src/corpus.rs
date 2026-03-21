@@ -1,10 +1,10 @@
 //! Corpus management: seed loading, queue, crash storage.
 
-use std::fs;
-use std::path::PathBuf;
-use serde::{Deserialize, Serialize};
 use crate::coverage::CoverageBitmap;
 use crate::crash::CrashReport;
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::PathBuf;
 
 /// Metadata stored alongside each corpus entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -12,10 +12,10 @@ pub struct CorpusEntry {
     pub id: u64,
     pub parent_id: Option<u64>,
     pub filename: String,
-    pub time_ms: u64,     // time when discovered
-    pub exec_count: u64,  // executions when discovered
-    pub mutator: String,  // which mutator produced this
-    pub new_edges: u32,   // new coverage edges introduced
+    pub time_ms: u64,    // time when discovered
+    pub exec_count: u64, // executions when discovered
+    pub mutator: String, // which mutator produced this
+    pub new_edges: u32,  // new coverage edges introduced
 }
 
 pub struct Corpus {
@@ -285,7 +285,9 @@ mod tests {
         // Set a known byte in the bitmap
         // We'll use raw access via the public API: set_edge to touch a known slot
         bm.set_edge(0x0800_0000, 0x0800_0100);
-        corpus.save_state(&bm, r#"{"total_executions":42}"#).unwrap();
+        corpus
+            .save_state(&bm, r#"{"total_executions":42}"#)
+            .unwrap();
         let loaded = corpus.load_state().unwrap();
         assert!(loaded.is_some());
         let bytes = loaded.unwrap();

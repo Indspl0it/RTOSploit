@@ -38,11 +38,17 @@ impl Access {
     }
 
     pub fn readable(&self) -> bool {
-        matches!(self, Access::ReadOnly | Access::ReadWrite | Access::ReadWriteOnce)
+        matches!(
+            self,
+            Access::ReadOnly | Access::ReadWrite | Access::ReadWriteOnce
+        )
     }
 
     pub fn writable(&self) -> bool {
-        matches!(self, Access::WriteOnly | Access::ReadWrite | Access::WriteOnce | Access::ReadWriteOnce)
+        matches!(
+            self,
+            Access::WriteOnly | Access::ReadWrite | Access::WriteOnce | Access::ReadWriteOnce
+        )
     }
 }
 
@@ -149,7 +155,9 @@ pub fn parse_svd_str(xml: &str) -> Result<Device> {
         match reader.read_event_into(&mut buf)? {
             Event::Eof => break,
             Event::Start(e) => {
-                let tag_str = std::str::from_utf8(e.name().as_ref()).unwrap_or("").to_owned();
+                let tag_str = std::str::from_utf8(e.name().as_ref())
+                    .unwrap_or("")
+                    .to_owned();
 
                 match tag_str.as_str() {
                     "device" => {
@@ -163,9 +171,8 @@ pub fn parse_svd_str(xml: &str) -> Result<Device> {
                         let mut derived_from: Option<String> = None;
                         for attr in e.attributes().flatten() {
                             if attr.key.as_ref() == b"derivedFrom" {
-                                derived_from = Some(
-                                    String::from_utf8_lossy(&attr.value).to_string()
-                                );
+                                derived_from =
+                                    Some(String::from_utf8_lossy(&attr.value).to_string());
                             }
                         }
                         let periph = parse_peripheral(&mut reader, derived_from)?;
@@ -183,9 +190,15 @@ pub fn parse_svd_str(xml: &str) -> Result<Device> {
                 let name_bytes = e.name();
                 let tag_str = std::str::from_utf8(name_bytes.as_ref()).unwrap_or("");
                 match tag_str {
-                    "peripherals" => { in_peripherals = false; }
-                    "device" => { in_device = false; }
-                    "name" | "version" | "description" => { current_device_field = None; }
+                    "peripherals" => {
+                        in_peripherals = false;
+                    }
+                    "device" => {
+                        in_device = false;
+                    }
+                    "name" | "version" | "description" => {
+                        current_device_field = None;
+                    }
                     _ => {}
                 }
             }
@@ -261,7 +274,9 @@ fn parse_peripheral(
     loop {
         match reader.read_event_into(&mut buf)? {
             Event::Start(e) => {
-                let tag = std::str::from_utf8(e.name().as_ref()).unwrap_or("").to_owned();
+                let tag = std::str::from_utf8(e.name().as_ref())
+                    .unwrap_or("")
+                    .to_owned();
                 match tag.as_str() {
                     "name" => name = read_text(reader, &mut buf)?,
                     "description" => description = read_text(reader, &mut buf)?,
@@ -308,7 +323,9 @@ fn parse_registers(reader: &mut Reader<&[u8]>) -> Result<Vec<Register>> {
     loop {
         match reader.read_event_into(&mut buf)? {
             Event::Start(e) => {
-                let tag = std::str::from_utf8(e.name().as_ref()).unwrap_or("").to_owned();
+                let tag = std::str::from_utf8(e.name().as_ref())
+                    .unwrap_or("")
+                    .to_owned();
                 if tag == "register" {
                     let reg = parse_register(reader)?;
                     registers.push(reg);
@@ -342,7 +359,9 @@ fn parse_register(reader: &mut Reader<&[u8]>) -> Result<Register> {
     loop {
         match reader.read_event_into(&mut buf)? {
             Event::Start(e) => {
-                let tag = std::str::from_utf8(e.name().as_ref()).unwrap_or("").to_owned();
+                let tag = std::str::from_utf8(e.name().as_ref())
+                    .unwrap_or("")
+                    .to_owned();
                 match tag.as_str() {
                     "name" => name = read_text(reader, &mut buf)?,
                     "description" => description = read_text(reader, &mut buf)?,
@@ -380,7 +399,15 @@ fn parse_register(reader: &mut Reader<&[u8]>) -> Result<Register> {
         buf.clear();
     }
 
-    Ok(Register { name, description, address_offset, size, reset_value, access, fields })
+    Ok(Register {
+        name,
+        description,
+        address_offset,
+        size,
+        reset_value,
+        access,
+        fields,
+    })
 }
 
 fn parse_fields(reader: &mut Reader<&[u8]>) -> Result<Vec<Field>> {
@@ -390,7 +417,9 @@ fn parse_fields(reader: &mut Reader<&[u8]>) -> Result<Vec<Field>> {
     loop {
         match reader.read_event_into(&mut buf)? {
             Event::Start(e) => {
-                let tag = std::str::from_utf8(e.name().as_ref()).unwrap_or("").to_owned();
+                let tag = std::str::from_utf8(e.name().as_ref())
+                    .unwrap_or("")
+                    .to_owned();
                 if tag == "field" {
                     let f = parse_field(reader)?;
                     fields.push(f);
@@ -423,7 +452,9 @@ fn parse_field(reader: &mut Reader<&[u8]>) -> Result<Field> {
     loop {
         match reader.read_event_into(&mut buf)? {
             Event::Start(e) => {
-                let tag = std::str::from_utf8(e.name().as_ref()).unwrap_or("").to_owned();
+                let tag = std::str::from_utf8(e.name().as_ref())
+                    .unwrap_or("")
+                    .to_owned();
                 match tag.as_str() {
                     "name" => name = read_text(reader, &mut buf)?,
                     "description" => description = read_text(reader, &mut buf)?,
@@ -466,7 +497,13 @@ fn parse_field(reader: &mut Reader<&[u8]>) -> Result<Field> {
         bit_width = m - l + 1;
     }
 
-    Ok(Field { name, description, bit_offset, bit_width, access })
+    Ok(Field {
+        name,
+        description,
+        bit_offset,
+        bit_width,
+        access,
+    })
 }
 
 /// Parse a hex or decimal integer string.

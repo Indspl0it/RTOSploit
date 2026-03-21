@@ -143,10 +143,10 @@ impl UartWrite {
         // LDR R1, [PC, #0] — the literal will be placed after BX LR
         out.extend_from_slice(&[0x01, 0x49]); // LDR R1, [PC, #4] (1 word ahead after alignment)
         out.extend_from_slice(&[0x03, 0xE0]); // B past_msg_addr_literal (+6 bytes)
-        // Placeholder: message address = PC + offset to message data.
-        // We'll use a self-relative approach: just push the message inline.
-        // For simplicity, embed a 4-byte placeholder and fix up manually.
-        // Actually, let's emit the message as immediate byte stores.
+                                              // Placeholder: message address = PC + offset to message data.
+                                              // We'll use a self-relative approach: just push the message inline.
+                                              // For simplicity, embed a 4-byte placeholder and fix up manually.
+                                              // Actually, let's emit the message as immediate byte stores.
 
         // Simpler approach: iterate message bytes, store each via MOV R2,#byte + STR R2,[R0]
         // (Avoids needing to know the final address at codegen time.)
@@ -161,7 +161,7 @@ impl UartWrite {
             // MOV R2, #byte  (only works for 0..=255, which is always true for u8)
             simple.push(byte);
             simple.push(0x22); // MOV R2, #imm8 → 0x22 is the opcode for R2
-            // STR R2, [R0]  = 0x02 0x60
+                               // STR R2, [R0]  = 0x02 0x60
             simple.extend_from_slice(&[0x02, 0x60]);
         }
 
@@ -197,9 +197,9 @@ impl MPUDisable {
 
         // LDR R0, [PC, #0]  — load MPU_CTRL address
         out.extend_from_slice(&[0x00, 0x48]); // LDR R0, [PC, #0]
-        // B past literal (4 bytes ahead)
+                                              // B past literal (4 bytes ahead)
         out.extend_from_slice(&[0x02, 0xE0]); // B +4
-        // .word 0xE000ED94
+                                              // .word 0xE000ED94
         out.extend_from_slice(&Self::MPU_CTRL.to_le_bytes());
 
         // MOV R1, #0

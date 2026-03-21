@@ -4,46 +4,46 @@
 /// Lower number = generate first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Priority {
-    Critical = 0,   // Clock, Flash — firmware hangs without these
-    High = 1,       // GPIO, UART — commonly polled during init
-    Medium = 2,     // Timer, SPI, I2C — needed for full boot
-    Low = 3,        // ADC, DAC, DMA — application-specific
+    Critical = 0, // Clock, Flash — firmware hangs without these
+    High = 1,     // GPIO, UART — commonly polled during init
+    Medium = 2,   // Timer, SPI, I2C — needed for full boot
+    Low = 3,      // ADC, DAC, DMA — application-specific
 }
 
 /// Known peripheral name patterns and their assigned priorities.
 static PERIPHERAL_PRIORITY_PATTERNS: &[(&str, Priority)] = &[
     // Critical — P0
-    ("RCC",    Priority::Critical),
-    ("CLK",    Priority::Critical),
-    ("PMC",    Priority::Critical),
-    ("CGU",    Priority::Critical),
-    ("FLASH",  Priority::Critical),
-    ("FMC",    Priority::Critical),
-    ("FCR",    Priority::Critical),
+    ("RCC", Priority::Critical),
+    ("CLK", Priority::Critical),
+    ("PMC", Priority::Critical),
+    ("CGU", Priority::Critical),
+    ("FLASH", Priority::Critical),
+    ("FMC", Priority::Critical),
+    ("FCR", Priority::Critical),
     // High — P1
-    ("GPIO",   Priority::High),
-    ("PORT",   Priority::High),
-    ("UART",   Priority::High),
-    ("USART",  Priority::High),
+    ("GPIO", Priority::High),
+    ("PORT", Priority::High),
+    ("UART", Priority::High),
+    ("USART", Priority::High),
     ("LPUART", Priority::High),
-    ("UARTE",  Priority::High),
+    ("UARTE", Priority::High),
     // Medium — P2
-    ("TIM",    Priority::Medium),
-    ("TIMER",  Priority::Medium),
-    ("TC",     Priority::Medium),
-    ("SPI",    Priority::Medium),
-    ("I2C",    Priority::Medium),
-    ("TWI",    Priority::Medium),
-    ("PWM",    Priority::Medium),
+    ("TIM", Priority::Medium),
+    ("TIMER", Priority::Medium),
+    ("TC", Priority::Medium),
+    ("SPI", Priority::Medium),
+    ("I2C", Priority::Medium),
+    ("TWI", Priority::Medium),
+    ("PWM", Priority::Medium),
     // Low — P3
-    ("ADC",    Priority::Low),
-    ("DAC",    Priority::Low),
-    ("DMA",    Priority::Low),
-    ("CAN",    Priority::Low),
-    ("USB",    Priority::Low),
-    ("ETH",    Priority::Low),
-    ("SDMMC",  Priority::Low),
-    ("SDIO",   Priority::Low),
+    ("ADC", Priority::Low),
+    ("DAC", Priority::Low),
+    ("DMA", Priority::Low),
+    ("CAN", Priority::Low),
+    ("USB", Priority::Low),
+    ("ETH", Priority::Low),
+    ("SDMMC", Priority::Low),
+    ("SDIO", Priority::Low),
 ];
 
 /// Determine the priority of a peripheral by name.

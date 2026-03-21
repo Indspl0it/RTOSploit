@@ -1,7 +1,7 @@
 //! Input mutators: eight mutation strategies + weighted scheduler.
 
-use rand::Rng;
 use crate::config::MutationConfig;
+use rand::Rng;
 
 // ── Interesting values ────────────────────────────────────────────────────────
 
@@ -27,11 +27,15 @@ const INTERESTING_U32: &[[u8; 4]] = &[
 pub struct BitFlipMutator;
 
 impl BitFlipMutator {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 
     /// Flip 1, 2, or 4 bits at a random position.
     pub fn mutate(&self, input: &mut Vec<u8>, _max_size: usize, rng: &mut impl Rng) {
-        if input.is_empty() { return; }
+        if input.is_empty() {
+            return;
+        }
         let num_bits = [1usize, 2, 4][rng.gen_range(0..3)];
         for _ in 0..num_bits {
             let byte_idx = rng.gen_range(0..input.len());
@@ -46,11 +50,15 @@ impl BitFlipMutator {
 pub struct ByteFlipMutator;
 
 impl ByteFlipMutator {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 
     /// Flip 1, 2, or 4 bytes (XOR 0xFF) at a random position.
     pub fn mutate(&self, input: &mut Vec<u8>, _max_size: usize, rng: &mut impl Rng) {
-        if input.is_empty() { return; }
+        if input.is_empty() {
+            return;
+        }
         let num_bytes = [1usize, 2, 4][rng.gen_range(0..3)];
         let start = rng.gen_range(0..input.len());
         let end = (start + num_bytes).min(input.len());
@@ -65,11 +73,15 @@ impl ByteFlipMutator {
 pub struct ArithmeticMutator;
 
 impl ArithmeticMutator {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 
     /// Add or subtract 1-35 to a random u16 or u32 at a random byte offset (LE).
     pub fn mutate(&self, input: &mut Vec<u8>, _max_size: usize, rng: &mut impl Rng) {
-        if input.len() < 2 { return; }
+        if input.len() < 2 {
+            return;
+        }
         let delta = rng.gen_range(1u32..=35u32);
         let add = rng.gen_bool(0.5);
         let use_u32 = rng.gen_bool(0.5) && input.len() >= 4;
@@ -103,11 +115,15 @@ impl ArithmeticMutator {
 pub struct InterestingValueMutator;
 
 impl InterestingValueMutator {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 
     /// Replace bytes at a random offset with an interesting boundary value.
     pub fn mutate(&self, input: &mut Vec<u8>, _max_size: usize, rng: &mut impl Rng) {
-        if input.is_empty() { return; }
+        if input.is_empty() {
+            return;
+        }
 
         // Pick category: 0=u8, 1=u16, 2=u32
         let category = if input.len() >= 4 {
@@ -146,14 +162,22 @@ impl InterestingValueMutator {
 pub struct BlockInsertMutator;
 
 impl BlockInsertMutator {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 
     /// Insert 1-128 random bytes at a random position (enforces max_size).
     pub fn mutate(&self, input: &mut Vec<u8>, max_size: usize, rng: &mut impl Rng) {
-        if input.len() >= max_size { return; }
+        if input.len() >= max_size {
+            return;
+        }
         let available = max_size - input.len();
         let count = rng.gen_range(1..=128usize.min(available));
-        let pos = if input.is_empty() { 0 } else { rng.gen_range(0..=input.len()) };
+        let pos = if input.is_empty() {
+            0
+        } else {
+            rng.gen_range(0..=input.len())
+        };
         let bytes: Vec<u8> = (0..count).map(|_| rng.gen()).collect();
         input.splice(pos..pos, bytes);
     }
@@ -164,11 +188,15 @@ impl BlockInsertMutator {
 pub struct BlockDeleteMutator;
 
 impl BlockDeleteMutator {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 
     /// Delete 1-128 bytes at a random position; never produces an empty output.
     pub fn mutate(&self, input: &mut Vec<u8>, _max_size: usize, rng: &mut impl Rng) {
-        if input.len() <= 1 { return; }
+        if input.len() <= 1 {
+            return;
+        }
         let max_delete = (input.len() - 1).min(128);
         let count = rng.gen_range(1..=max_delete);
         let pos = rng.gen_range(0..input.len() - count + 1);
@@ -181,7 +209,9 @@ impl BlockDeleteMutator {
 pub struct SpliceMutator;
 
 impl SpliceMutator {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 
     /// Combine first half of `input` with second half of `other`.
     pub fn mutate_splice(
@@ -191,7 +221,9 @@ impl SpliceMutator {
         _max_size: usize,
         _rng: &mut impl Rng,
     ) {
-        if input.is_empty() || other.is_empty() { return; }
+        if input.is_empty() || other.is_empty() {
+            return;
+        }
         let first_half = input.len() / 2;
         let second_start = other.len() / 2;
         input.truncate(first_half);
@@ -229,10 +261,18 @@ impl DictionaryMutator {
 
     /// Insert a random token at a random position (enforces max_size).
     pub fn mutate(&self, input: &mut Vec<u8>, max_size: usize, rng: &mut impl Rng) {
-        if self.tokens.is_empty() { return; }
+        if self.tokens.is_empty() {
+            return;
+        }
         let token = &self.tokens[rng.gen_range(0..self.tokens.len())];
-        if input.len() + token.len() > max_size { return; }
-        let pos = if input.is_empty() { 0 } else { rng.gen_range(0..=input.len()) };
+        if input.len() + token.len() > max_size {
+            return;
+        }
+        let pos = if input.is_empty() {
+            0
+        } else {
+            rng.gen_range(0..=input.len())
+        };
         input.splice(pos..pos, token.iter().copied());
     }
 }
@@ -258,15 +298,22 @@ impl MutationScheduler {
             config.dictionary_weight,
         ];
         let total_weight = weights.iter().sum();
-        Self { weights, total_weight }
+        Self {
+            weights,
+            total_weight,
+        }
     }
 
     /// Returns an index 0-7 corresponding to the selected mutator.
     pub fn select(&self, rng: &mut impl Rng) -> usize {
-        if self.total_weight == 0 { return 0; }
+        if self.total_weight == 0 {
+            return 0;
+        }
         let mut pick = rng.gen_range(0..self.total_weight);
         for (i, &w) in self.weights.iter().enumerate() {
-            if pick < w { return i; }
+            if pick < w {
+                return i;
+            }
             pick -= w;
         }
         self.weights.len() - 1
@@ -281,7 +328,9 @@ mod tests {
     use rand::SeedableRng;
     use rand_chacha::ChaCha8Rng;
 
-    fn rng() -> ChaCha8Rng { ChaCha8Rng::seed_from_u64(42) }
+    fn rng() -> ChaCha8Rng {
+        ChaCha8Rng::seed_from_u64(42)
+    }
 
     #[test]
     fn bit_flip_within_max_size() {
@@ -301,10 +350,15 @@ mod tests {
         for _ in 0..200 {
             let mut trial = original.clone();
             BitFlipMutator::new().mutate(&mut trial, 128, &mut rng);
-            let changed: u32 = trial.iter().zip(original.iter())
+            let changed: u32 = trial
+                .iter()
+                .zip(original.iter())
                 .map(|(a, b)| (a ^ b).count_ones())
                 .sum();
-            if changed == 1 { found_single = true; break; }
+            if changed == 1 {
+                found_single = true;
+                break;
+            }
         }
         assert!(found_single, "Expected at least one single-bit flip");
     }
@@ -364,7 +418,10 @@ mod tests {
         for _ in 0..200 {
             let mut input = vec![0xAAu8; 16];
             BlockDeleteMutator::new().mutate(&mut input, 128, &mut rng);
-            assert!(!input.is_empty(), "BlockDeleteMutator produced empty output");
+            assert!(
+                !input.is_empty(),
+                "BlockDeleteMutator produced empty output"
+            );
         }
     }
 
@@ -405,7 +462,11 @@ mod tests {
         let scheduler = MutationScheduler::new(&config);
         let mut rng = rng();
         for _ in 0..100 {
-            assert_eq!(scheduler.select(&mut rng), 0, "Should always select index 0");
+            assert_eq!(
+                scheduler.select(&mut rng),
+                0,
+                "Should always select index 0"
+            );
         }
     }
 

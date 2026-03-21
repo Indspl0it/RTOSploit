@@ -11,14 +11,17 @@ pub mod mutators;
 pub mod report;
 
 pub use config::FuzzerConfig;
+pub use corpus::{Corpus, CorpusEntry};
 pub use coverage::{CoverageBitmap, FuzzerStats};
+pub use crash::{
+    find_function_prologues, patch_vector_table, CrashDetector, CrashReport, CrashType,
+    HeapShadowTracker, WatchdogState,
+};
 pub use engine::{ExecutionResult, FuzzerEngine};
+pub use harness::{
+    CrashInfo, ExitCode, FuzzHarness, HarnessConfig, HarnessExecutionResult, InProcessHarness,
+    QemuHarness,
+};
 pub use mmio::{MMIOInputSplitter, MMIOResponseProvider};
 pub use mutators::MutationScheduler;
-pub use crash::{
-    CrashType, CrashReport, CrashDetector, patch_vector_table, WatchdogState,
-    find_function_prologues, HeapShadowTracker,
-};
-pub use corpus::{Corpus, CorpusEntry};
-pub use harness::{FuzzHarness, HarnessConfig, HarnessExecutionResult, ExitCode, CrashInfo, QemuHarness, InProcessHarness};
-pub use report::{FuzzReport, CrashSeverity, ReportCrashType};
+pub use report::{CrashSeverity, FuzzReport, ReportCrashType};

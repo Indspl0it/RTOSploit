@@ -32,17 +32,17 @@ impl std::fmt::Display for CrashType {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CrashReport {
-    pub crash_id: String,         // UUID-like hex string
-    pub timestamp: u64,           // Unix timestamp seconds
-    pub detection_layer: String,  // "L1_hardfault", "L2_busfault", "L3_watchdog", etc.
-    pub input_file: String,       // path relative to output dir
+    pub crash_id: String,        // UUID-like hex string
+    pub timestamp: u64,          // Unix timestamp seconds
+    pub detection_layer: String, // "L1_hardfault", "L2_busfault", "L3_watchdog", etc.
+    pub input_file: String,      // path relative to output dir
     pub input_size: usize,
     pub registers: HashMap<String, u32>, // "pc", "sp", "lr", "r0"-"r12", "xpsr"
-    pub stack_dump: Vec<u8>,      // raw bytes from stack area
-    pub fault_address: u32,       // address of fault (BFAR/MMFAR or 0)
+    pub stack_dump: Vec<u8>,             // raw bytes from stack area
+    pub fault_address: u32,              // address of fault (BFAR/MMFAR or 0)
     pub fault_type: CrashType,
-    pub backtrace: Vec<u32>,      // call chain addresses
-    pub coverage_edges: u32,      // how many edges were covered before crash
+    pub backtrace: Vec<u32>, // call chain addresses
+    pub coverage_edges: u32, // how many edges were covered before crash
     pub execution_time_us: u64,
     pub reproducible: bool,
     pub pre_crash_events: Vec<String>, // last N event descriptions from instrumentation ring buffer
@@ -220,9 +220,9 @@ impl WatchdogState {
 /// Layer 4: Stack canary location descriptor
 #[derive(Debug, Clone)]
 pub struct CanaryLocation {
-    pub function_addr: u32,  // address of the function being protected
-    pub canary_offset: u32,  // stack offset where canary was placed
-    pub canary_value: u32,   // expected canary value (default 0xDEADBEEF)
+    pub function_addr: u32, // address of the function being protected
+    pub canary_offset: u32, // stack offset where canary was placed
+    pub canary_value: u32,  // expected canary value (default 0xDEADBEEF)
 }
 
 /// Scan ARM Thumb2 firmware for function prologues (PUSH {R*, LR} patterns).
@@ -299,7 +299,9 @@ impl HeapShadowTracker {
     }
 
     pub fn check_double_free(&self, addr: u32) -> bool {
-        self.blocks.iter().any(|b| b.block_addr == addr && b.is_free)
+        self.blocks
+            .iter()
+            .any(|b| b.block_addr == addr && b.is_free)
     }
 }
 

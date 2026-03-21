@@ -9,9 +9,8 @@ use rand_chacha::ChaCha8Rng;
 use crate::config::FuzzerConfig;
 use crate::coverage::{CoverageBitmap, FuzzerStats};
 use crate::mutators::{
-    ArithmeticMutator, BitFlipMutator, BlockDeleteMutator, BlockInsertMutator,
-    ByteFlipMutator, DictionaryMutator, InterestingValueMutator, MutationScheduler,
-    SpliceMutator,
+    ArithmeticMutator, BitFlipMutator, BlockDeleteMutator, BlockInsertMutator, ByteFlipMutator,
+    DictionaryMutator, InterestingValueMutator, MutationScheduler, SpliceMutator,
 };
 
 // ── ExecutionResult ───────────────────────────────────────────────────────────
@@ -21,7 +20,11 @@ pub enum ExecutionResult {
     /// The input completed normally, producing a coverage bitmap.
     Normal { coverage: CoverageBitmap },
     /// The firmware crashed (signal, program counter, register dump).
-    Crash { signal: u32, pc: u32, registers: Vec<u32> },
+    Crash {
+        signal: u32,
+        pc: u32,
+        registers: Vec<u32>,
+    },
     /// The input caused a timeout.
     Timeout,
 }
@@ -141,7 +144,10 @@ impl FuzzerEngine {
             .open(&csv_path)?;
         use std::io::Write;
         if write_header {
-            writeln!(file, "start_time,unique_edges,execs_per_second,corpus_size,crash_count,total_executions")?;
+            writeln!(
+                file,
+                "start_time,unique_edges,execs_per_second,corpus_size,crash_count,total_executions"
+            )?;
         }
         writeln!(file, "{}", self.state.stats.to_csv_row())?;
 
@@ -325,7 +331,11 @@ mod tests {
         for _ in 0..100 {
             let mut input = vec![0xAAu8; 256];
             eng.mutate_input(&mut input);
-            assert!(input.len() <= max, "input grew beyond max_size: {}", input.len());
+            assert!(
+                input.len() <= max,
+                "input grew beyond max_size: {}",
+                input.len()
+            );
         }
     }
 
@@ -363,7 +373,9 @@ mod tests {
         std::fs::write(dir.join("seed1"), b"hello").unwrap();
         std::fs::write(dir.join("seed2"), b"world").unwrap();
         let mut eng = engine();
-        let count = eng.load_seeds_from_dir(&dir).expect("load_seeds_from_dir failed");
+        let count = eng
+            .load_seeds_from_dir(&dir)
+            .expect("load_seeds_from_dir failed");
         assert_eq!(count, 2);
         assert_eq!(eng.state.corpus.len(), 2);
         // Cleanup

@@ -14,8 +14,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
-use crate::engine::ExecutionResult;
 use crate::crash::CrashType;
+use crate::engine::ExecutionResult;
 
 // ── CrashSeverity ────────────────────────────────────────────────────────────
 
@@ -143,7 +143,11 @@ impl FuzzReport {
         let input_hash = fnv1a_hex(input);
         let input_data = base64_encode(input);
         let dedup_hash = Self::compute_dedup_hash(&crash_type, pc);
-        let id = format!("{:016x}-{}", timestamp, &input_hash[..8.min(input_hash.len())]);
+        let id = format!(
+            "{:016x}-{}",
+            timestamp,
+            &input_hash[..8.min(input_hash.len())]
+        );
 
         Self {
             id,
@@ -167,7 +171,11 @@ impl FuzzReport {
     /// severity `Info`.
     pub fn from_execution(result: &ExecutionResult, input: &[u8]) -> Self {
         match result {
-            ExecutionResult::Crash { signal, pc, registers } => {
+            ExecutionResult::Crash {
+                signal,
+                pc,
+                registers,
+            } => {
                 let crash_type = signal_to_crash_type(*signal);
                 let severity = classify_severity(&crash_type);
                 let mut reg_map = HashMap::new();
@@ -266,9 +274,9 @@ impl FuzzReport {
 /// Map a POSIX signal number to a [`ReportCrashType`].
 fn signal_to_crash_type(signal: u32) -> ReportCrashType {
     match signal {
-        11 => ReportCrashType::HardFault, // SIGSEGV
-        7 => ReportCrashType::BusFault,   // SIGBUS
-        6 => ReportCrashType::UsageFault, // SIGABRT
+        11 => ReportCrashType::HardFault,       // SIGSEGV
+        7 => ReportCrashType::BusFault,         // SIGBUS
+        6 => ReportCrashType::UsageFault,       // SIGABRT
         14 => ReportCrashType::WatchdogTimeout, // SIGALRM
         _ => ReportCrashType::Unknown,
     }

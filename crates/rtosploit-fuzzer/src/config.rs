@@ -89,12 +89,24 @@ struct YamlMutation {
     dictionary: Option<PathBuf>,
 }
 
-fn default_watchdog_ms() -> u64 { 30_000 }
-fn default_memory_limit_mb() -> u64 { 256 }
-fn default_corpus_max_size() -> usize { 10_000 }
-fn default_max_input_size() -> usize { 4096 }
-fn default_mmio_pool_size() -> usize { 256 }
-fn bool_true() -> bool { true }
+fn default_watchdog_ms() -> u64 {
+    30_000
+}
+fn default_memory_limit_mb() -> u64 {
+    256
+}
+fn default_corpus_max_size() -> usize {
+    10_000
+}
+fn default_max_input_size() -> usize {
+    4096
+}
+fn default_mmio_pool_size() -> usize {
+    256
+}
+fn bool_true() -> bool {
+    true
+}
 
 // ── Construction ─────────────────────────────────────────────────────────────
 
@@ -202,8 +214,7 @@ mod tests {
     #[test]
     fn load_default_yaml() {
         let manifest = env!("CARGO_MANIFEST_DIR");
-        let path = Path::new(manifest)
-            .join("../../configs/fuzzer/default.yaml");
+        let path = Path::new(manifest).join("../../configs/fuzzer/default.yaml");
         let cfg = FuzzerConfig::from_yaml(&path).expect("parse default.yaml");
         assert_eq!(cfg.timeout_ms, 1000);
         assert_eq!(cfg.corpus_max_size, 10_000);
@@ -213,16 +224,14 @@ mod tests {
     #[test]
     fn load_fast_yaml() {
         let manifest = env!("CARGO_MANIFEST_DIR");
-        let path = Path::new(manifest)
-            .join("../../configs/fuzzer/fast.yaml");
+        let path = Path::new(manifest).join("../../configs/fuzzer/fast.yaml");
         FuzzerConfig::from_yaml(&path).expect("parse fast.yaml");
     }
 
     #[test]
     fn load_thorough_yaml() {
         let manifest = env!("CARGO_MANIFEST_DIR");
-        let path = Path::new(manifest)
-            .join("../../configs/fuzzer/thorough.yaml");
+        let path = Path::new(manifest).join("../../configs/fuzzer/thorough.yaml");
         let cfg = FuzzerConfig::from_yaml(&path).expect("parse thorough.yaml");
         assert_eq!(cfg.coverage_mode, CoverageMode::MMIOAware);
     }

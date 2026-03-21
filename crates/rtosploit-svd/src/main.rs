@@ -10,7 +10,10 @@ use rtosploit_svd::{
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
-#[command(name = "svd-gen", about = "Generate QEMU peripheral stubs from ARM CMSIS SVD files")]
+#[command(
+    name = "svd-gen",
+    about = "Generate QEMU peripheral stubs from ARM CMSIS SVD files"
+)]
 struct Args {
     /// Path to SVD file
     svd: PathBuf,
@@ -44,7 +47,11 @@ fn main() -> Result<()> {
     let mcu_name = args.name.unwrap_or_else(|| device.name.clone());
     let mode = StubMode::from_str(&args.mode);
 
-    println!("Device: {} ({} peripherals)", device.name, device.peripherals.len());
+    println!(
+        "Device: {} ({} peripherals)",
+        device.name,
+        device.peripherals.len()
+    );
 
     let mut peripherals = device.peripherals.clone();
     sort_by_priority(&mut peripherals, |p| &p.name);
@@ -78,6 +85,10 @@ fn main() -> Result<()> {
         println!("  Generated: {}", path.display());
     }
 
-    println!("Done: {} stub files in {}", stubs.len(), output_dir.display());
+    println!(
+        "Done: {} stub files in {}",
+        stubs.len(),
+        output_dir.display()
+    );
     Ok(())
 }

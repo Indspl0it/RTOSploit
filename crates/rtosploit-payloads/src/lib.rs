@@ -13,5 +13,10 @@ pub use encoder::{get_encoder, Encoder, NullFreeEncoder, RawEncoder, XorEncoder}
 pub use rop::{
     build_chain, check_chain, filter_gadgets, find_gadgets, ChainGoal, Gadget, GadgetType,
 };
-pub use shellcode::thumb2::{InfiniteLoop as Thumb2InfiniteLoop, MPUDisable, NopSled as Thumb2NopSled, RegisterDump, UartWrite, VTORRedirect};
-pub use shellcode::riscv::{InfiniteLoop as RiscvInfiniteLoop, NopSled as RiscvNopSled, PMPDisable};
+pub use shellcode::riscv::{
+    InfiniteLoop as RiscvInfiniteLoop, NopSled as RiscvNopSled, PMPDisable,
+};
+pub use shellcode::thumb2::{
+    InfiniteLoop as Thumb2InfiniteLoop, MPUDisable, NopSled as Thumb2NopSled, RegisterDump,
+    UartWrite, VTORRedirect,
+};

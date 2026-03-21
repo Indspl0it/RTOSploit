@@ -52,7 +52,9 @@ impl<'a> MMIOResponseProvider<'a> {
 
     /// Consume one byte, wrapping around when exhausted.
     pub fn read_u8(&mut self) -> u8 {
-        if self.pool.is_empty() { return 0; }
+        if self.pool.is_empty() {
+            return 0;
+        }
         let val = self.pool[self.cursor % self.pool.len()];
         self.cursor = (self.cursor + 1) % self.pool.len();
         val
@@ -121,7 +123,10 @@ mod tests {
         let input: Vec<u8> = vec![0xAA; 10];
         let splitter = MMIOInputSplitter::new(32);
         let (app, pool) = splitter.split(&input);
-        assert!(app.is_empty(), "app_input should be empty when input < pool_size");
+        assert!(
+            app.is_empty(),
+            "app_input should be empty when input < pool_size"
+        );
         assert_eq!(pool.len(), 10, "pool should be the entire input");
     }
 
@@ -151,7 +156,11 @@ mod tests {
         let mut provider = MMIOResponseProvider::new(&pool);
         let val = provider.read_u32();
         // Little-endian: 0x04030201
-        assert_eq!(val, 0x04030201u32, "Expected LE 0x04030201, got 0x{:08X}", val);
+        assert_eq!(
+            val, 0x04030201u32,
+            "Expected LE 0x04030201, got 0x{:08X}",
+            val
+        );
     }
 
     #[test]
@@ -180,7 +189,11 @@ mod tests {
         let mut provider = MMIOResponseProvider::new(&pool);
         assert_eq!(provider.read_u8(), 0xAA);
         provider.reset();
-        assert_eq!(provider.read_u8(), 0xAA, "reset should restart from index 0");
+        assert_eq!(
+            provider.read_u8(),
+            0xAA,
+            "reset should restart from index 0"
+        );
     }
 
     #[test]
