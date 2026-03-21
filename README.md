@@ -2,7 +2,7 @@
 
 **RTOS Exploitation & Bare-Metal Fuzzing Framework**
 
-RTOSploit is a security testing framework for embedded RTOS firmware. It provides grey-box fuzzing, static analysis, exploit module execution, CVE correlation, and automated report generation — all running entirely in QEMU with no physical hardware required.
+RTOSploit is a security testing framework for embedded RTOS firmware. It provides grey-box fuzzing, static analysis, exploit module assessment and payload generation, CVE correlation, and automated report generation — all running entirely in QEMU with no physical hardware required.
 
 **Supported RTOSes:** FreeRTOS · ThreadX · Zephyr
 **Supported architectures:** ARM Cortex-M (M3/M4/M7/M33) · RISC-V RV32I
@@ -369,7 +369,7 @@ rtosploit --json fuzz --firmware fw.bin --machine mps2-an385 --output ./out
 
 ### `exploit`
 
-Manage and execute exploit modules.
+Manage and run exploit modules (vulnerability assessment and payload generation).
 
 #### `exploit list`
 
@@ -407,7 +407,7 @@ rtosploit exploit run freertos/heap_overflow \
 
 #### `exploit check MODULE_PATH`
 
-Non-destructive vulnerability probe. Does not execute the exploit payload.
+Non-destructive vulnerability probe. Only checks for vulnerability presence — does not generate exploit artifacts.
 
 ```bash
 rtosploit exploit check freertos/mpu_bypass \
@@ -702,7 +702,7 @@ scan-output/
 
 ### `console`
 
-Metasploit-style interactive REPL for exploit module execution.
+Metasploit-style interactive REPL for exploit module assessment and payload generation.
 
 ```bash
 rtosploit console
@@ -717,7 +717,7 @@ rtosploit console
 | `set <key> <value>` | Set a module option |
 | `unset <key>` | Clear a module option |
 | `check` | Non-destructive vulnerability probe |
-| `exploit` / `run` | Execute the loaded module |
+| `exploit` / `run` | Run the loaded module (assess vulnerability and generate payload) |
 | `back` | Deselect module, return to root prompt |
 | `search <term>` | Search by name, CVE, RTOS, or category |
 | `banner` | Display the ASCII art banner |
@@ -1161,7 +1161,7 @@ rtosploit/
 ├── exploits/
 │   ├── base.py              ExploitModule ABC, ExploitOption, ExploitResult
 │   ├── registry.py          Dynamic module discovery
-│   ├── runner.py            Execution orchestration
+│   ├── runner.py            Assessment orchestration
 │   ├── freertos/            6 FreeRTOS modules
 │   ├── threadx/             3 ThreadX modules
 │   └── zephyr/              6 Zephyr modules
