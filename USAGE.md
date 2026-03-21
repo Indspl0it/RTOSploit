@@ -23,7 +23,7 @@ Three commands to get running:
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/rtosploit/rtosploit && cd rtosploit
+git clone https://github.com/Indspl0it/RTOSploit && cd rtosploit
 
 # 2. Build the image
 docker compose build
@@ -42,7 +42,7 @@ Results are written to the `./output/` directory on your host.
 
 ```bash
 # 1. Clone and create a virtualenv
-git clone https://github.com/rtosploit/rtosploit && cd rtosploit
+git clone https://github.com/Indspl0it/RTOSploit && cd rtosploit
 python3 -m venv .venv
 source .venv/bin/activate
 

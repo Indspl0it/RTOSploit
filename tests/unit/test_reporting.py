@@ -233,10 +233,11 @@ class TestSARIFGenerator:
         assert "sarif-schema-2.1.0" in sarif["$schema"]
 
     def test_tool_driver_name(self, sample_report):
+        from rtosploit import __version__
         sarif = SARIFGenerator().generate(sample_report)
         driver = sarif["runs"][0]["tool"]["driver"]
         assert driver["name"] == "RTOSploit"
-        assert driver["version"] == "0.1.0"
+        assert driver["version"] == __version__
 
     def test_severity_mapping(self, sample_report):
         sarif = SARIFGenerator().generate(sample_report)

@@ -10,7 +10,7 @@ readme = "README.md"
 license = {text = "GPL-3.0-only"}
 requires-python = ">=3.10"
 authors = [
-    {name = "RTOSploit Contributors"},
+    {name = "Santhosh Ballikonda"},
 ]
 keywords = ["security", "fuzzing", "embedded", "rtos"]
 classifiers = [
@@ -49,8 +49,8 @@ dev = [
 rtosploit = "rtosploit.cli.main:main"
 
 [project.urls]
-Homepage = "https://github.com/rtosploit/rtosploit"
-Repository = "https://github.com/rtosploit/rtosploit"
+Homepage = "https://github.com/Indspl0it/RTOSploit"
+Repository = "https://github.com/Indspl0it/RTOSploit"
 
 [tool.hatch.version]
 path = "VERSION"

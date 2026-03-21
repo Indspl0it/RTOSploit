@@ -3,7 +3,7 @@
 ## Development Setup
 
 ```bash
-git clone https://github.com/rtosploit/rtosploit
+git clone https://github.com/Indspl0it/RTOSploit
 cd rtosploit
 python -m venv .venv
 source .venv/bin/activate

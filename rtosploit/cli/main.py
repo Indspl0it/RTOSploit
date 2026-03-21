@@ -15,8 +15,20 @@ console = Console()
 err_console = Console(stderr=True)
 
 
+def _show_version(ctx: click.Context, _param: click.Parameter, value: bool) -> None:
+    """Custom --version callback that prints the ASCII banner."""
+    if not value or ctx.resilient_parsing:
+        return
+    from rtosploit.interactive.banner import version_banner
+    version_banner(console)
+    ctx.exit()
+
+
 @click.group()
-@click.version_option(version=__version__, prog_name="rtosploit")
+@click.option(
+    "--version", is_flag=True, is_eager=True, expose_value=False,
+    callback=_show_version, help="Show version banner and exit.",
+)
 @click.option("--verbose", "-v", is_flag=True, default=False, help="Enable verbose (DEBUG) output.")
 @click.option("--quiet", "-q", is_flag=True, default=False, help="Suppress info, show only warnings/errors.")
 @click.option("--json", "output_json", is_flag=True, default=False, help="Output results as JSON.")

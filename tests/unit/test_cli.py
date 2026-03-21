@@ -70,7 +70,8 @@ def test_version(runner):
     """--version outputs the version string."""
     result = runner.invoke(cli, ["--version"])
     assert result.exit_code == 0
-    assert "0.1.0" in result.output
+    from rtosploit import __version__
+    assert __version__ in result.output
 
 
 def test_help_lists_all_subcommands(runner):

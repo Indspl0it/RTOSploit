@@ -21,7 +21,7 @@ This guide covers installing RTOSploit, setting up QEMU, and optionally building
 ### Create a Virtual Environment
 
 ```bash
-git clone https://github.com/rtosploit/rtosploit
+git clone https://github.com/Indspl0it/RTOSploit
 cd rtosploit
 python3 -m venv .venv
 source .venv/bin/activate       # Linux/macOS

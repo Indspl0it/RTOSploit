@@ -60,7 +60,7 @@ class TestPackaging:
     def test_package_version_importable(self):
         import rtosploit
         assert hasattr(rtosploit, "__version__")
-        assert rtosploit.__version__ == "0.1.0"
+        assert rtosploit.__version__ == Path("VERSION").read_text().strip()
 
     def test_package_exports_key_modules(self):
         import rtosploit.exploits.registry

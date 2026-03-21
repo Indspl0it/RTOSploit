@@ -3,11 +3,16 @@
 </p>
 
 <p align="center">
+  <img src="https://img.shields.io/badge/version-2.5.1-blue" alt="Version 2.5.1"/>
   <a href="#4-installation"><img src="https://img.shields.io/badge/python-3.10%2B-blue?logo=python&logoColor=white" alt="Python 3.10+"/></a>
   <img src="https://img.shields.io/badge/tests-1370%2B%20passing-brightgreen" alt="Tests"/>
   <img src="https://img.shields.io/badge/license-GPL--3.0-orange" alt="License"/>
   <img src="https://img.shields.io/badge/QEMU-9.0%2B-informational?logo=qemu" alt="QEMU"/>
   <img src="https://img.shields.io/badge/exploits-15%20modules-red" alt="Exploits"/>
+</p>
+
+<p align="center">
+  <strong>Author:</strong> Santhosh Ballikonda
 </p>
 
 ---
@@ -358,7 +363,7 @@ rtosploit(freertos/heap_overflow)> exploit
 ### From Source
 
 ```bash
-git clone https://github.com/rtosploit/rtosploit
+git clone https://github.com/Indspl0it/RTOSploit
 cd rtosploit
 python -m venv .venv
 source .venv/bin/activate       # Windows: .venv\Scripts\activate
