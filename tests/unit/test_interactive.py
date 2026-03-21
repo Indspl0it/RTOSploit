@@ -9,7 +9,7 @@ import pytest
 from click.testing import CliRunner
 
 from rtosploit.interactive.session import FirmwareContext, InteractiveSession
-from rtosploit.interactive.banner import print_banner, BANNER_ART
+from rtosploit.interactive.banner import print_banner
 from rtosploit.interactive.menus import (
     MAIN_MENU,
     MAIN_FOOTER,
@@ -107,7 +107,8 @@ class TestFirmwareContext:
 
 class TestBanner:
     def test_banner_art_is_nonempty(self):
-        assert len(BANNER_ART) > 50  # ASCII art is substantial
+        from rtosploit.interactive.banner import _RTOS_LINES
+        assert len(_RTOS_LINES) >= 5  # Block art has multiple lines
 
     def test_print_banner_no_crash(self):
         from rich.console import Console
@@ -116,7 +117,8 @@ class TestBanner:
         console = Console(file=buf, force_terminal=True)
         print_banner(console)
         output = buf.getvalue()
-        assert "RTOSploit" in output
+        assert "Santhosh" in output
+        assert len(output) > 100
 
 
 # ---------------------------------------------------------------------------
