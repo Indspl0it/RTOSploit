@@ -13,20 +13,22 @@ console = Console()
 @click.option("--detect-mpu", is_flag=True, default=False, help="Detect MPU configuration")
 @click.option("--strings", is_flag=True, default=False, help="Extract and classify strings")
 @click.option("--detect-peripherals", "detect_periphs", is_flag=True, default=False, help="Detect peripheral usage")
+@click.option("--rehost-check", is_flag=True, default=False, help="Check rehosting readiness")
 @click.option("--all", "run_all", is_flag=True, default=False, help="Run all analyses")
 @click.pass_context
-def analyze(ctx, firmware, detect_rtos, detect_heap, detect_mpu, strings, detect_periphs, run_all):
+def analyze(ctx, firmware, detect_rtos, detect_heap, detect_mpu, strings, detect_periphs, rehost_check, run_all):
     """Run static analysis on a firmware binary.
 
     \b
     Example:
       rtosploit analyze --firmware fw.bin --all
       rtosploit analyze --firmware fw.bin --detect-rtos --detect-mpu
+      rtosploit analyze --firmware fw.bin --rehost-check
     """
     if run_all:
-        detect_rtos = detect_heap = detect_mpu = strings = detect_periphs = True
+        detect_rtos = detect_heap = detect_mpu = strings = detect_periphs = rehost_check = True
 
-    if not any([detect_rtos, detect_heap, detect_mpu, strings, detect_periphs]):
+    if not any([detect_rtos, detect_heap, detect_mpu, strings, detect_periphs, rehost_check]):
         detect_rtos = detect_heap = detect_mpu = strings = detect_periphs = True
 
     output_json = ctx.obj.get("output_json", False)
@@ -102,6 +104,55 @@ def analyze(ctx, firmware, detect_rtos, detect_heap, detect_mpu, strings, detect
             results["peripherals"] = det_result.to_dict()
         except Exception as e:
             results["peripherals"] = {"error": str(e)}
+
+    if rehost_check:
+        try:
+            from rtosploit.analysis.fingerprint import fingerprint_firmware
+            from rtosploit.peripherals.auto_config import AutoConfigGenerator, resolve_qemu_machine
+
+            fp = fingerprint_firmware(fw_image)
+            generator = AutoConfigGenerator()
+            _pconfig, summary = generator.generate(fw_image, fingerprint=fp)
+
+            # Compute readiness score (0-100%)
+            score = 0
+            # MCU detected (not falling back to unknown): +25
+            if summary.get("mcu_family", "unknown") != "unknown":
+                score += 25
+            # SVD available: +25
+            if summary.get("svd_available", False):
+                score += 25
+            # HAL matches found: +25
+            if summary.get("hal_matches", 0) > 0:
+                score += 25
+            # RTOS detected: +15
+            if summary.get("rtos_type", "unknown") != "unknown":
+                score += 15
+            # Has intercepts: +10
+            if summary.get("intercept_count", 0) > 0:
+                score += 10
+            score = min(score, 100)
+
+            qemu_machine = summary.get("qemu_machine", "unknown")
+            # Check if machine was resolved from MCU or fell back to architecture default
+            mcu = summary.get("mcu_family", "unknown")
+            resolved_machine = resolve_qemu_machine(mcu, summary.get("architecture", "armv7m"))
+            machine_resolved = mcu != "unknown"
+
+            results["rehost_check"] = {
+                "qemu_machine": qemu_machine,
+                "machine_resolved": machine_resolved,
+                "svd_available": summary.get("svd_available", False),
+                "hal_hooks": summary.get("intercept_count", 0),
+                "hal_matches": summary.get("hal_matches", 0),
+                "model_count": summary.get("model_count", 0),
+                "readiness_score": score,
+                "mcu_family": mcu,
+                "rtos_type": summary.get("rtos_type", "unknown"),
+                "architecture": summary.get("architecture", "unknown"),
+            }
+        except Exception as e:
+            results["rehost_check"] = {"error": str(e)}
 
     if output_json:
         import json
@@ -184,3 +235,42 @@ def analyze(ctx, firmware, detect_rtos, detect_heap, detect_mpu, strings, detect
                 console.print("  Peripherals: [yellow]none detected[/yellow]")
         else:
             console.print(f"  Peripherals: [yellow]detection error: {r['error']}[/yellow]")
+
+    if "rehost_check" in results:
+        r = results["rehost_check"]
+        if "error" not in r:
+            score = r["readiness_score"]
+            if score >= 75:
+                score_style = "green"
+            elif score >= 40:
+                score_style = "yellow"
+            else:
+                score_style = "red"
+
+            machine_str = r["qemu_machine"]
+            if r["machine_resolved"]:
+                machine_str += " [green](resolved)[/green]"
+            else:
+                machine_str += " [yellow](fallback)[/yellow]"
+
+            svd_str = "[green]yes[/green]" if r["svd_available"] else "[red]no[/red]"
+
+            from rich.table import Table as RichTable
+            rh_table = RichTable(show_header=False, box=None, padding=(0, 2))
+            rh_table.add_column("Key", style="bold cyan")
+            rh_table.add_column("Value")
+            rh_table.add_row("QEMU machine", machine_str)
+            rh_table.add_row("SVD available", svd_str)
+            rh_table.add_row("HAL hooks", str(r["hal_hooks"]))
+            rh_table.add_row("HAL matches", str(r["hal_matches"]))
+            rh_table.add_row("Models", str(r["model_count"]))
+            rh_table.add_row("Readiness", f"[{score_style}]{score}%[/{score_style}]")
+
+            from rich.panel import Panel as RichPanel
+            console.print(RichPanel(
+                rh_table,
+                title="[bold]Rehosting Readiness[/bold]",
+                border_style=score_style,
+            ))
+        else:
+            console.print(f"  Rehost check: [yellow]error: {r['error']}[/yellow]")

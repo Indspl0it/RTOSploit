@@ -16,6 +16,7 @@ from rtosploit.emulation.memory import MemoryOps
 from rtosploit.fuzzing.mutator import Mutator
 from rtosploit.fuzzing.corpus import CorpusManager
 from rtosploit.fuzzing.crash_reporter import CrashReporter
+from rtosploit.fuzzing.input_injector import InputInjector
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,8 @@ class FuzzWorker:
         coverage_addr: int | None = None,
         coverage_size: int = 4096,
         persistent_mode: bool = False,
+        auto_rehost: bool = False,
+        injector: InputInjector | None = None,
     ) -> None:
         self.worker_id = worker_id
         self.firmware_path = firmware_path
@@ -68,6 +71,8 @@ class FuzzWorker:
         self.coverage_addr = coverage_addr
         self.coverage_size = coverage_size
         self.persistent_mode = persistent_mode
+        self.auto_rehost = auto_rehost
+        self._injector = injector
         self._stats = FuzzStats()
         self._crash_data_list: list[dict] = []
         self._stop_event = threading.Event()
@@ -148,6 +153,15 @@ class FuzzWorker:
                 if addr and addr != 0 and addr != 0xFFFFFFFF:
                     gdb.set_breakpoint(addr & ~1)
 
+            # 3b. Auto-rehost: set breakpoints at HAL input functions
+            if self.auto_rehost and self._injector:
+                for bp_addr in self._injector.get_breakpoint_addresses():
+                    gdb.set_breakpoint(bp_addr & ~1)
+                logger.info(
+                    "Worker %d: auto-rehost set %d input breakpoints",
+                    self.worker_id, self._injector.input_count,
+                )
+
             # 4. Save base snapshot
             if not self.persistent_mode:
                 snapshot_mgr.save(qemu, f"fuzz_base_{self.worker_id}")
@@ -191,12 +205,18 @@ class FuzzWorker:
                 mutated = mutator.mutate(base_input)
                 mutated = mutated[: self.inject_size]
 
-                # c. Write input to target SRAM
-                gdb.write_memory(self.inject_addr, mutated)
+                # c. Write input to target
+                if self.auto_rehost and self._injector:
+                    # Auto mode: split data across discovered input channels
+                    for fuzz_input, chunk in self._injector.split_data(mutated):
+                        gdb.write_memory(fuzz_input.address, chunk)
+                else:
+                    # Legacy mode: fixed inject address
+                    gdb.write_memory(self.inject_addr, mutated)
 
-                if self.inject_len_addr is not None:
-                    length_bytes = len(mutated).to_bytes(4, "little")
-                    gdb.write_memory(self.inject_len_addr, length_bytes)
+                    if self.inject_len_addr is not None:
+                        length_bytes = len(mutated).to_bytes(4, "little")
+                        gdb.write_memory(self.inject_len_addr, length_bytes)
 
                 # d. Resume and wait for stop
                 gdb.continue_execution()
@@ -323,6 +343,8 @@ class FuzzEngine:
         exec_timeout: float = 0.05,
         jobs: int = 1,
         persistent_mode: bool = False,
+        auto_rehost: bool = False,
+        injector: InputInjector | None = None,
     ) -> None:
         self.firmware_path = firmware_path
         self.machine_name = machine_name
@@ -334,6 +356,8 @@ class FuzzEngine:
         self.exec_timeout = exec_timeout
         self.jobs = jobs
         self.persistent_mode = persistent_mode
+        self.auto_rehost = auto_rehost
+        self._injector = injector
         self._config = config or RTOSploitConfig()
         self._stats = FuzzStats()
 
@@ -395,6 +419,8 @@ class FuzzEngine:
                 coverage_addr=self.coverage_addr,
                 coverage_size=self.coverage_size,
                 persistent_mode=self.persistent_mode,
+                auto_rehost=self.auto_rehost,
+                injector=self._injector,
             )
             workers.append(worker)
 

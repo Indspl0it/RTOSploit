@@ -16,7 +16,7 @@ console = Console()
 
 @click.command("fuzz")
 @click.option("--firmware", "-f", required=True, type=click.Path(exists=True), help="Firmware binary")
-@click.option("--machine", "-m", required=True, type=str, help="QEMU machine name")
+@click.option("--machine", "-m", required=False, type=str, default=None, help="QEMU machine name (required unless --auto)")
 @click.option("--rtos", type=click.Choice(["freertos", "threadx", "zephyr", "auto"]), default="auto", show_default=True, help="Target RTOS")
 @click.option("--output", "-o", type=click.Path(), default="fuzz-output", show_default=True, help="Output directory for crashes and corpus")
 @click.option("--seeds", "-s", type=click.Path(exists=True), default=None, help="Seed corpus directory")
@@ -24,29 +24,79 @@ console = Console()
 @click.option("--jobs", "-j", type=int, default=1, show_default=True, help="Parallel fuzzer instances")
 @click.option("--exec-timeout", type=float, default=0.05, show_default=True, help="Per-execution timeout in seconds")
 @click.option("--persistent", is_flag=True, default=False, help="Use persistent mode (system_reset instead of loadvm)")
-@click.option("--inject-addr", type=str, default="0x20010000", help="SRAM address for input injection (hex)")
+@click.option("--inject-addr", type=str, default=None, help="SRAM address for input injection (hex, default: 0x20010000)")
 @click.option("--inject-len-addr", type=str, default=None, help="Address to write input length (hex)")
 @click.option("--corpus-dir", type=click.Path(), default=None, help="Corpus directory (default: {output}/corpus)")
 @click.option("--seed", type=click.Path(exists=True), default=None, help="Initial seed file or directory")
 @click.option("--coverage-addr", type=str, default=None, help="Address of coverage bitmap in target memory (hex)")
 @click.option("--peripheral-config", type=click.Path(exists=True), default=None, help="YAML peripheral config for HAL intercepts")
+@click.option("--auto", "auto_mode", is_flag=True, default=False, help="Fully automatic fuzzing: fingerprint firmware and discover input points")
 @click.pass_context
 def fuzz(ctx, firmware, machine, rtos, output, seeds, timeout, jobs,
          exec_timeout, persistent,
          inject_addr, inject_len_addr, corpus_dir, seed, coverage_addr,
-         peripheral_config):
+         peripheral_config, auto_mode):
     """Start fuzzing a firmware image with QEMU-based grey-box fuzzing.
 
     \b
     Example:
       rtosploit fuzz --firmware fw.bin --machine mps2-an385 --output ./output
       rtosploit fuzz --firmware fw.bin --machine mps2-an385 --timeout 3600 --jobs 8
-      rtosploit fuzz --firmware fw.bin --machine mps2-an385 --exec-timeout 0.1 --persistent
+      rtosploit fuzz --firmware fw.bin --auto --timeout 300
     """
     output_json = ctx.obj.get("output_json", False)
 
+    # Auto mode: fingerprint firmware and discover input points
+    injector = None
+    if auto_mode:
+        from rtosploit.utils.binary import FirmwareImage
+        from rtosploit.analysis.fingerprint import fingerprint_firmware
+        from rtosploit.fuzzing.input_injector import InputInjector
+
+        fw_image = FirmwareImage.load(firmware)
+        fp = fingerprint_firmware(fw_image)
+
+        if not output_json:
+            console.print("\n[bold cyan]Auto-rehost fingerprint:[/bold cyan]")
+            console.print(f"  RTOS:        [cyan]{fp.rtos_type}[/cyan] (confidence {fp.confidence:.0%})")
+            console.print(f"  MCU family:  [cyan]{fp.mcu_family}[/cyan]")
+            console.print(f"  Architecture:[cyan]{fp.architecture}[/cyan]")
+            if fp.input_interfaces:
+                console.print(f"  Interfaces:  [cyan]{', '.join(fp.input_interfaces)}[/cyan]")
+
+        injector = InputInjector.discover(fw_image)
+
+        if not output_json:
+            if injector.input_count > 0:
+                console.print(f"\n[bold green]Discovered {injector.input_count} fuzzable input points:[/bold green]")
+                for inp in injector.inputs:
+                    console.print(f"  [cyan]{inp.symbol}[/cyan] @ 0x{inp.address:08X} ({inp.peripheral_type}, priority={inp.priority})")
+            else:
+                console.print("\n[yellow]No fuzzable input points discovered. Falling back to fixed inject address.[/yellow]")
+
+        # Infer machine from MCU family if not provided
+        if machine is None:
+            _MCU_TO_MACHINE = {
+                "stm32": "mps2-an385",
+                "nrf52": "microbit",
+                "esp32": "esp32",
+                "lpc": "lpc4088",
+                "sam": "sam3x8e",
+            }
+            machine = _MCU_TO_MACHINE.get(fp.mcu_family)
+            if machine is None:
+                raise click.UsageError(
+                    f"Could not infer QEMU machine for MCU family '{fp.mcu_family}'. "
+                    "Please specify --machine explicitly."
+                )
+            if not output_json:
+                console.print(f"  Machine:     [cyan]{machine}[/cyan] (auto-detected from {fp.mcu_family})")
+
+    if machine is None and not auto_mode:
+        raise click.UsageError("--machine is required unless --auto is used.")
+
     # Parse hex addresses
-    inject_addr_int = int(inject_addr, 16)
+    inject_addr_int = int(inject_addr, 16) if inject_addr else 0x20010000
     inject_len_addr_int = int(inject_len_addr, 16) if inject_len_addr else None
     coverage_addr_int = int(coverage_addr, 16) if coverage_addr else None
 
@@ -75,6 +125,8 @@ def fuzz(ctx, firmware, machine, rtos, output, seeds, timeout, jobs,
                 exec_timeout=exec_timeout,
                 jobs=jobs,
                 persistent_mode=persistent,
+                auto_rehost=auto_mode,
+                injector=injector,
             )
 
             final = engine.run(
@@ -89,6 +141,7 @@ def fuzz(ctx, firmware, machine, rtos, output, seeds, timeout, jobs,
                 "rtos": rtos,
                 "output": output,
                 "peripheral_config": peripheral_config,
+                "auto_mode": auto_mode,
                 "status": "completed",
                 "jobs": jobs,
                 "exec_timeout": exec_timeout,
@@ -99,6 +152,8 @@ def fuzz(ctx, firmware, machine, rtos, output, seeds, timeout, jobs,
                 "elapsed": round(final.elapsed, 1),
                 "exec_per_sec": round(final.exec_per_sec, 1),
             }
+            if injector:
+                result["injector"] = injector.to_dict()
         else:
             result = {
                 "firmware": firmware,
@@ -123,6 +178,8 @@ def fuzz(ctx, firmware, machine, rtos, output, seeds, timeout, jobs,
     console.print(f"  Output:      [cyan]{output}[/cyan]")
     console.print(f"  Jobs:        [cyan]{jobs}[/cyan]")
     console.print(f"  Exec timeout:[cyan]{exec_timeout}s[/cyan]")
+    if auto_mode:
+        console.print("  Mode:        [cyan]auto-rehost[/cyan]")
     if persistent:
         console.print("  Mode:        [cyan]persistent (system_reset)[/cyan]")
     if timeout:
@@ -142,6 +199,8 @@ def fuzz(ctx, firmware, machine, rtos, output, seeds, timeout, jobs,
         exec_timeout=exec_timeout,
         jobs=jobs,
         persistent_mode=persistent,
+        auto_rehost=auto_mode,
+        injector=injector,
     )
 
     engine_stats = {}
