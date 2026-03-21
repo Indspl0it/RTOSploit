@@ -29,7 +29,7 @@ RUN cargo build --release
 FROM ubuntu:24.04
 
 LABEL description="RTOSploit — RTOS Exploitation & Bare-Metal Fuzzing Framework"
-LABEL version="0.1.0"
+LABEL version="2.5.1"
 
 ENV DEBIAN_FRONTEND=noninteractive
 

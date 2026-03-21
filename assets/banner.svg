@@ -150,7 +150,7 @@
 
   <!-- Bottom tagline -->
   <text x="600" y="260" text-anchor="middle" font-family="monospace" font-size="12" fill="#484f58" letter-spacing="1">
-    Fuzz &#x2022; Assess &#x2022; Rehost &#x2022; Report &#x2014; Software-Only via QEMU
+    Analyze &#x2022; Assess &#x2022; Exploit &#x2022; Rehost &#x2022; Fuzz &#x2022; Report &#x2014; Software-Only via QEMU
   </text>
 
   <!-- Subtle border -->

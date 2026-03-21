@@ -17,7 +17,7 @@
 
 ---
 
-RTOSploit is a security testing framework purpose-built for embedded RTOS firmware. It combines grey-box fuzzing, static analysis, vulnerability assessment, CVE correlation, peripheral auto-rehosting, and automated reporting — all running entirely in software via QEMU emulation. No physical hardware required.
+RTOSploit is a security testing framework purpose-built for embedded RTOS firmware. It combines static analysis, CVE correlation, vulnerability assessment, exploit and payload generation, peripheral firmware auto-rehosting, grey-box fuzzing, and automated reporting — all running entirely in software via QEMU emulation. No physical hardware required.
 
 | | |
 |---|---|
@@ -53,14 +53,15 @@ RTOSploit is a security testing framework purpose-built for embedded RTOS firmwa
 
 Embedded RTOS firmware (FreeRTOS, ThreadX, Zephyr) runs on billions of devices — medical implants, automotive ECUs, industrial PLCs, IoT gateways — yet security testing tools for these targets are fragmented, hardware-dependent, and expensive. RTOSploit closes this gap.
 
-**What RTOSploit does:**
+**What RTOSploit does (in order of a typical workflow):**
 
-1. **Identifies** — Fingerprints RTOS type, version, MCU family, heap allocator, MPU configuration, and peripheral usage from a firmware binary alone
-2. **Emulates** — Boots firmware in QEMU with auto-detected peripheral models, HAL function intercepts, and smart MMIO fallback — zero manual configuration
-3. **Fuzzes** — Grey-box fuzzes the running firmware with AFL-compatible coverage tracking, crash deduplication, and multi-worker parallelism
-4. **Assesses** — Runs 15 exploit modules that detect known vulnerability patterns (heap corruption, MPU bypass, ISR hijacking, BLE overflows) and generate concrete payloads
-5. **Correlates** — Matches detected RTOS version against NVD CVE data
-6. **Reports** — Produces SARIF (for GitHub/IDE integration) and HTML reports with exploitability classification
+1. **Static Analysis** — Fingerprints RTOS type, version, MCU family, heap allocator, MPU configuration, and peripheral usage from a firmware binary alone
+2. **CVE Correlation** — Matches detected RTOS type and version against NVD CVE data to identify known vulnerabilities
+3. **Vulnerability Assessment** — Runs 15 exploit modules that detect known vulnerability patterns (heap corruption, MPU bypass, ISR hijacking, BLE overflows)
+4. **Exploit & Payload Generation** — Generates concrete exploit artifacts: overflow buffers, ROP chains, shellcode, and malformed packets
+5. **Firmware Rehosting** — Boots firmware in QEMU with auto-detected peripheral models, HAL function intercepts, and smart MMIO fallback — zero manual configuration
+6. **Grey-Box Fuzzing** — Fuzzes the running firmware with AFL-compatible coverage tracking, crash deduplication, and multi-worker parallelism
+7. **Reporting** — Produces SARIF (for GitHub/IDE integration) and HTML reports with exploitability classification
 
 **What RTOSploit does NOT do:**
 
@@ -236,7 +237,37 @@ Evidence from all layers is aggregated with weighted scoring. Confidence levels:
 | **String Extraction** | RTOS markers, SDK references, error messages | Classified string list |
 | **Rehost Readiness** | Can this firmware be auto-rehosted? Score 0-100% | QEMU machine, SVD, HAL hooks |
 
-### 3.2 Automatic Firmware Rehosting
+### 3.2 CVE Intelligence
+
+- **CVE Correlation** — match detected RTOS type and version against bundled NVD database
+- **CVE Search** — free-text search across CVE IDs, descriptions, product names
+- **NVD Sync** — pull latest entries from NIST NVD API (with rate limit backoff)
+- **VulnRange Labs** — CTF-style CVE reproduction challenges with progressive hints
+
+### 3.3 Vulnerability Assessment & Exploit Generation
+
+15 built-in modules that detect vulnerability patterns and generate concrete artifacts:
+
+| Category | Modules | What they produce |
+|----------|---------|-------------------|
+| Heap Corruption | 4 | Overflow buffers, fake metadata, write primitives |
+| MPU Bypass | 2 | Privilege escalation payloads, ROP chains |
+| ISR Hijacking | 1 | Vector table redirect payloads |
+| BLE Exploits | 4 | Malformed advertising/L2CAP/ASCS packets |
+| Kernel Attacks | 2 | TCB/thread entry overwrites, syscall chains |
+| Reconnaissance | 2 | Userspace config detection, race conditions |
+
+Each module provides:
+- `check` — non-destructive vulnerability assessment (safe to run in CI)
+- `exploit` — generates payload artifacts (buffer, addresses, chain)
+- Optional `inject` — writes payload into live QEMU via GDB (when emulation is active)
+
+**Payload Generation** (standalone):
+- ARM Thumb2 and RISC-V shellcode templates (NOP sled, infinite loop, MPU disable, VTOR redirect)
+- ROP gadget finder with bad-character filtering
+- XOR and null-free encoders
+
+### 3.4 Automatic Firmware Rehosting
 
 RTOSploit can boot firmware with **zero manual configuration**:
 
@@ -264,7 +295,7 @@ This single command:
 
 **Alternative Engine:** Unicorn-based emulation (optional) for MMIO-heavy workloads — 10-100x faster than QEMU+GDB for pure peripheral testing.
 
-### 3.3 Grey-Box Fuzzing
+### 3.5 Grey-Box Fuzzing
 
 - QEMU-based firmware fuzzer with AFL-compatible coverage bitmaps
 - **Auto mode** (`--auto`): fingerprints firmware, discovers input points via HAL database, injects fuzz data through HAL receive functions — no manual `--inject-addr` needed
@@ -274,36 +305,6 @@ This single command:
 - Live dashboard: executions/sec, crash count, coverage percentage
 - Optional native Rust fuzzer binary for maximum throughput
 - Interrupt injection via NVIC for ISR-triggered code paths
-
-### 3.4 Exploit Assessment & Payload Generation
-
-15 built-in modules that detect vulnerability patterns and generate concrete artifacts:
-
-| Category | Modules | What they produce |
-|----------|---------|-------------------|
-| Heap Corruption | 4 | Overflow buffers, fake metadata, write primitives |
-| MPU Bypass | 2 | Privilege escalation payloads, ROP chains |
-| ISR Hijacking | 1 | Vector table redirect payloads |
-| BLE Exploits | 4 | Malformed advertising/L2CAP/ASCS packets |
-| Kernel Attacks | 2 | TCB/thread entry overwrites, syscall chains |
-| Reconnaissance | 2 | Userspace config detection, race conditions |
-
-Each module provides:
-- `check` — non-destructive vulnerability assessment (safe to run in CI)
-- `exploit` — generates payload artifacts (buffer, addresses, chain)
-- Optional `inject` — writes payload into live QEMU via GDB (when emulation is active)
-
-**Payload Generation** (standalone):
-- ARM Thumb2 and RISC-V shellcode templates (NOP sled, infinite loop, MPU disable, VTOR redirect)
-- ROP gadget finder with bad-character filtering
-- XOR and null-free encoders
-
-### 3.5 CVE Intelligence
-
-- **CVE Correlation** — match detected RTOS type and version against bundled NVD database
-- **CVE Search** — free-text search across CVE IDs, descriptions, product names
-- **NVD Sync** — pull latest entries from NIST NVD API (with rate limit backoff)
-- **VulnRange Labs** — CTF-style CVE reproduction challenges with progressive hints
 
 ### 3.6 Post-Fuzzing Analysis
 
