@@ -59,3 +59,4 @@ docs/implementation-plan-v2.md
 results/
 fuzz-output/
 scan-output/
+vulnrange/downloaded_firmware/
