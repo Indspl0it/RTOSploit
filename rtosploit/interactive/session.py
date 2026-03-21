@@ -5,7 +5,7 @@ from __future__ import annotations
 import platform
 import re
 from dataclasses import dataclass, field
-from pathlib import Path, PurePosixPath, PureWindowsPath
+from pathlib import Path, PureWindowsPath
 from typing import Any, Optional
 
 

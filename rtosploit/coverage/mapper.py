@@ -6,7 +6,7 @@ from typing import Optional
 
 import capstone
 
-from rtosploit.coverage.bitmap_reader import BitmapReader, CoverageMap, BITMAP_SIZE
+from rtosploit.coverage.bitmap_reader import BitmapReader, CoverageMap
 
 
 class CoverageMapper:

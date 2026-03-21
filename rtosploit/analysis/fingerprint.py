@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional
 
-from rtosploit.utils.binary import BinaryFormat, FirmwareImage
+from rtosploit.utils.binary import FirmwareImage
 
 
 @dataclass

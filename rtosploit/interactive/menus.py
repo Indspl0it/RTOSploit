@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from rich.console import Console
-from rich.text import Text
 
 
 @dataclass

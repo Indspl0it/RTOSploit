@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
 
 import pytest
 
 from rtosploit.peripherals.models.mmio_fallback import (
     CompositeMMIOHandler,
     CortexMSystemRegisters,
-    MMIOAccess,
     MMIOFallbackModel,
 )
 from rtosploit.peripherals.models.svd_peripheral import SVDPeripheralModel
@@ -196,7 +194,7 @@ class TestCompositeMMIOHandler:
         )
 
         # Read at USART1 base (offset 0 = SR register)
-        val = handler.read(0x40011000)
+        _val = handler.read(0x40011000)
         stats = handler.get_coverage_stats()
         assert stats["svd_handled"] == 1
         assert stats["fallback_handled"] == 0
@@ -205,7 +203,7 @@ class TestCompositeMMIOHandler:
         """Address not in any SVD model range goes to fallback."""
         handler = CompositeMMIOHandler(svd_models={})
 
-        val = handler.read(0x40050000)
+        _val = handler.read(0x40050000)
         stats = handler.get_coverage_stats()
         assert stats["fallback_handled"] == 1
         assert stats["svd_handled"] == 0

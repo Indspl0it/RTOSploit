@@ -5,7 +5,6 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 from click.testing import CliRunner
 
 from rtosploit.interactive.session import FirmwareContext, InteractiveSession
@@ -16,7 +15,7 @@ from rtosploit.interactive.menus import (
     FIRMWARE_MENU,
     FIRMWARE_FOOTER,
 )
-from rtosploit.interactive.app import InteractiveApp, interactive_main
+from rtosploit.interactive.app import InteractiveApp
 
 
 # ---------------------------------------------------------------------------

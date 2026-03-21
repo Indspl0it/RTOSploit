@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from rtosploit.peripherals.hal_database import HALDatabase, HALFunctionEntry
+from rtosploit.peripherals.hal_database import HALDatabase
 
 
 @pytest.fixture

@@ -13,7 +13,7 @@ walking the subscriber list, so it is safe to call from background threads
 from __future__ import annotations
 
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -224,7 +224,6 @@ class InstrumentationBus:
             TaskSwitchEvent,
             HeapOperationEvent,
             StackPointerChangeEvent,
-            WatchdogTickEvent,
         )
 
         cfg = self.config

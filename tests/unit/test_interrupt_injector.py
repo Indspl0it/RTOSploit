@@ -5,15 +5,13 @@ from __future__ import annotations
 import struct
 from unittest.mock import MagicMock
 
-import pytest
 
 from rtosploit.peripherals.interrupt_injector import (
     InterruptInjector,
-    ISREntry,
     _NVIC_ISPR_BASE,
     _SYSTEM_EXCEPTION_COUNT,
 )
-from rtosploit.peripherals.svd_model import SVDDevice, SVDPeripheral, SVDRegister
+from rtosploit.peripherals.svd_model import SVDDevice, SVDPeripheral
 from rtosploit.utils.binary import BinaryFormat, FirmwareImage
 
 

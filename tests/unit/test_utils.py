@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import struct
-import tempfile
-from pathlib import Path
 
 import pytest
 
@@ -12,10 +10,10 @@ from rtosploit.utils.packing import (
     align_down, align_up, hexdump, p16, p32, p8, u16, u32, u8,
 )
 from rtosploit.utils.memory_map import (
-    CortexMMemoryMap, MemoryRegion, RegionType,
+    CortexMMemoryMap, RegionType,
 )
 from rtosploit.utils.binary import (
-    BinaryFormat, FirmwareImage, detect_format, load_raw,
+    BinaryFormat, detect_format, load_raw,
 )
 
 

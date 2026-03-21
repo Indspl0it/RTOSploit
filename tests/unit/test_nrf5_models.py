@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
 
-from rtosploit.peripherals.model import CPUState, HandlerResult
+from rtosploit.peripherals.model import CPUState
 from rtosploit.peripherals.models.nrf5_hal import (
-    NRF_SUCCESS,
     NRF_ERROR_NOT_FOUND,
     NRF5Base,
     NRF5BLE,

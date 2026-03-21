@@ -52,7 +52,7 @@ def handle_boot_qemu(session: InteractiveSession, console: Console) -> None:
             paused=paused,
         )
         fw.qemu = qemu
-        console.print(f"[green]QEMU started successfully.[/green]")
+        console.print("[green]QEMU started successfully.[/green]")
         if paused:
             console.print("[dim]Attach GDB to continue execution.[/dim]")
     except Exception as exc:

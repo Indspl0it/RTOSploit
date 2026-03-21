@@ -15,7 +15,6 @@ No Rust FFI is required at this stage.
 import struct
 import pytest
 
-from rtosploit.payloads import ShellcodeGenerator, ROPHelper
 from rtosploit.payloads.shellcode import ShellcodeGenerator
 from rtosploit.payloads.rop import ROPHelper
 

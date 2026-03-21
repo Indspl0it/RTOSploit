@@ -17,7 +17,6 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 # ---------------------------------------------------------------------------
@@ -139,15 +138,8 @@ class TelemetryCollector:
             MemoryAccessEvent,
             BasicBlockTransitionEvent,
             InterruptFiredEvent,
-            SyscallEntryEvent,
-            SyscallReturnEvent,
-            PeripheralReadEvent,
-            PeripheralWriteEvent,
             TaskSwitchEvent,
             HeapOperationEvent,
-            StackPointerChangeEvent,
-            WatchdogTickEvent,
-            HeapOpType,
         )
 
         if isinstance(event, ExceptionEntryEvent):

@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 import urllib.error
 
-import pytest
 
-from rtosploit.peripherals.svd_cache import SVDCache, _MCU_SVD_MAP
+from rtosploit.peripherals.svd_cache import SVDCache
 
 
 # ---------------------------------------------------------------------------

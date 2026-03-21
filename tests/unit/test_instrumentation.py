@@ -13,12 +13,7 @@ Covers:
 from __future__ import annotations
 
 import json
-import os
-import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock
 
-import pytest
 
 # ---------------------------------------------------------------------------
 # events helpers
@@ -27,23 +22,12 @@ import pytest
 from rtosploit.instrumentation.events import (
     classify_cfsr,
     exception_name,
-    AccessType,
     TaskSwitchTrigger,
     HeapOpType,
-    StackChangeCause,
     ExceptionEntryEvent,
-    ExceptionReturnEvent,
-    MemoryAccessEvent,
     BasicBlockTransitionEvent,
-    InterruptFiredEvent,
-    SyscallEntryEvent,
-    SyscallReturnEvent,
-    WatchdogTickEvent,
-    PeripheralReadEvent,
-    PeripheralWriteEvent,
     TaskSwitchEvent,
     HeapOperationEvent,
-    StackPointerChangeEvent,
 )
 from rtosploit.instrumentation.bus import (
     InstrumentationBus,

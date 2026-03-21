@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import time
@@ -244,7 +243,7 @@ class CIPipeline:
         self.metadata["triaged_crashes"] = len(triaged_crashes)
         logger.info("Triaged %d crashes", len(triaged_crashes))
 
-    def _build_report(self, fingerprint: dict) -> "EngagementReport":
+    def _build_report(self, fingerprint: dict) -> "EngagementReport":  # noqa: F821
         """Build an EngagementReport from accumulated findings."""
         from rtosploit.reporting.models import EngagementReport
 
@@ -260,7 +259,7 @@ class CIPipeline:
             metadata=self.metadata,
         )
 
-    def _generate_outputs(self, report: "EngagementReport") -> None:
+    def _generate_outputs(self, report: "EngagementReport") -> None:  # noqa: F821
         """Generate SARIF and/or HTML reports based on config."""
         output_path = Path(self.config.output_dir)
         os.makedirs(output_path, exist_ok=True)

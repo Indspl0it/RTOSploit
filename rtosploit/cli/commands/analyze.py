@@ -136,7 +136,7 @@ def analyze(ctx, firmware, detect_rtos, detect_heap, detect_mpu, strings, detect
             qemu_machine = summary.get("qemu_machine", "unknown")
             # Check if machine was resolved from MCU or fell back to architecture default
             mcu = summary.get("mcu_family", "unknown")
-            resolved_machine = resolve_qemu_machine(mcu, summary.get("architecture", "armv7m"))
+            _resolved_machine = resolve_qemu_machine(mcu, summary.get("architecture", "armv7m"))
             machine_resolved = mcu != "unknown"
 
             results["rehost_check"] = {

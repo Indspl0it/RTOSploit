@@ -2,18 +2,13 @@
 
 from __future__ import annotations
 
-import struct
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
-import yaml
 
 from rtosploit.analysis.fingerprint import RTOSFingerprint
 from rtosploit.peripherals.auto_config import (
     AutoConfigGenerator,
     _DEFAULT_MODEL_CLASS,
-    _MODEL_CLASS_MAP,
     resolve_qemu_machine,
     serialize_config,
 )
@@ -296,7 +291,7 @@ class TestSerializeConfig:
         result = serialize_config(config)
         assert isinstance(result, str)
         # Should be parseable YAML (at least the non-comment parts)
-        lines = [l for l in result.split("\n") if l.strip() and not l.strip().startswith("#")]
+        lines = [line for line in result.split("\n") if line.strip() and not line.strip().startswith("#")]
         assert len(lines) > 0
 
     def test_serialize_empty_config(self) -> None:

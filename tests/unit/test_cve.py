@@ -6,7 +6,6 @@ import json
 import tempfile
 from pathlib import Path
 
-import pytest
 
 from rtosploit.cve.database import CVEEntry, CVEDatabase
 from rtosploit.cve.correlator import CVECorrelator, CorrelationResult

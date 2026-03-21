@@ -137,7 +137,7 @@ def report(ctx, input_dir: str, fmt: str, output: str, firmware: str, architectu
             "engagement_id": engagement_report.engagement_id,
         }, indent=2))
     else:
-        console.print(f"\n[bold green]Report generated[/bold green]")
+        console.print("\n[bold green]Report generated[/bold green]")
         console.print(f"  Findings:  [cyan]{len(findings)}[/cyan]")
         console.print(f"  Skipped:   [dim]{skipped}[/dim]")
         for fp in files_written:

@@ -6,9 +6,8 @@ All tests use mocks -- no real QEMU process is required.
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
 

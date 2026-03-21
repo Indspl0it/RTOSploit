@@ -6,22 +6,16 @@ All tests use mocks — no real QEMU process is required.
 from __future__ import annotations
 
 import json
-import struct
-import tempfile
-from pathlib import Path
-from typing import Any
-from unittest.mock import MagicMock, patch, PropertyMock, call
+from unittest.mock import MagicMock, patch, call
 
 import pytest
 import yaml
 
 from rtosploit.emulation.machines import (
-    MachineConfig,
     PeripheralConfig,
     load_machine,
     list_machines,
     _parse_machine_yaml,
-    _get_configs_dir,
 )
 from rtosploit.emulation.qmp import QMPClient
 from rtosploit.emulation.gdb import GDBClient, _checksum
@@ -369,10 +363,10 @@ class TestGDBClient:
 
         payload = "OK"
         csum = _checksum(payload)
-        raw_response = f"$OK#{csum:02x}".encode("latin-1")
+        _raw_response = f"$OK#{csum:02x}".encode("latin-1")
 
         # recv calls: read until '$', then packet body + checksum
-        call_responses = [b"$"] + [c.to_bytes(1, "little") for c in b"OK#"] + [
+        _call_responses = [b"$"] + [c.to_bytes(1, "little") for c in b"OK#"] + [
             bytes([csum >> 4 | (csum & 0xF0), csum & 0x0F])
         ]
         # Simpler: return the entire packet as body

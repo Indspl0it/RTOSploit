@@ -5,10 +5,10 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, TYPE_CHECKING
 
-from rtosploit.peripherals.model import CPUState, HandlerResult, PeripheralModel
+from rtosploit.peripherals.model import CPUState, PeripheralModel
 
 if TYPE_CHECKING:
-    from rtosploit.emulation.gdb import GDBClient
+    pass
 
 logger = logging.getLogger(__name__)
 

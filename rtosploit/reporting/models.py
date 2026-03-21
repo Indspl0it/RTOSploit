@@ -93,7 +93,7 @@ def finding_from_fuzz_report(data: dict) -> Finding:
     )
 
 
-def finding_from_triaged_crash(triaged: "TriagedCrash") -> Finding:
+def finding_from_triaged_crash(triaged: "TriagedCrash") -> Finding:  # noqa: F821
     """Convert a TriagedCrash to a Finding.
 
     Imports TriagedCrash lazily to avoid circular dependencies.
@@ -210,7 +210,7 @@ def finding_from_exploit_result(result_dict: dict) -> Finding:
     )
 
 
-def finding_from_cve(cve_entry: "CVEEntry", rtos: str = "", version: str = "") -> Finding:
+def finding_from_cve(cve_entry: "CVEEntry", rtos: str = "", version: str = "") -> Finding:  # noqa: F821
     """Convert a CVEEntry to a Finding.
 
     Parameters

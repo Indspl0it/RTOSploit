@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import struct
 
 import pytest
 
@@ -13,11 +12,9 @@ from rtosploit.analysis.fingerprint import (
 )
 from rtosploit.analysis.heap_detect import HeapInfo, detect_heap
 from rtosploit.analysis.mpu_check import (
-    MPUConfig,
     MPURegion,
     _parse_rasr,
     _detect_vulnerabilities,
-    check_mpu,
 )
 from rtosploit.analysis.strings import (
     extract_strings,
@@ -266,17 +263,17 @@ def test_parse_rasr_fields():
     parsed = _parse_rasr(rasr)
     assert parsed["ap"] == 3
     assert parsed["size_bytes"] == 2 ** (17 + 1)
-    assert parsed["xn"] == False
-    assert parsed["enable"] == True
-    assert parsed["executable"] == True
+    assert not parsed["xn"]
+    assert parsed["enable"]
+    assert parsed["executable"]
 
 
 def test_parse_rasr_xn_set():
     # XN=1 means NOT executable
     rasr = (1 << 28) | (1 << 24) | (0b01010 << 1) | 1
     parsed = _parse_rasr(rasr)
-    assert parsed["xn"] == True
-    assert parsed["executable"] == False
+    assert parsed["xn"]
+    assert not parsed["executable"]
 
 
 # ---------------------------------------------------------------------------

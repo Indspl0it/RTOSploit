@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from rtosploit.emulation.gdb import GDBClient
+    pass
 
 
 # Sentinel used by @hal_handler to tag methods

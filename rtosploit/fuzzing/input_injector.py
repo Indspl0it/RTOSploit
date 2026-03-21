@@ -7,10 +7,10 @@ based on HAL database semantic analysis.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
-from rtosploit.peripherals.hal_database import HALDatabase, HALFunctionEntry
+from rtosploit.peripherals.hal_database import HALDatabase
 from rtosploit.utils.binary import FirmwareImage
 
 logger = logging.getLogger(__name__)

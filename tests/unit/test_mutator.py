@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
 
 from rtosploit.fuzzing.mutator import (
     INTERESTING_8,
-    INTERESTING_16,
-    INTERESTING_32,
     Mutator,
 )
 

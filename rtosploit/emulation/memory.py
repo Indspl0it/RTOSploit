@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 import struct
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING
 
 from rtosploit.errors import OperationError
 
@@ -97,7 +97,7 @@ class MemoryOps:
             chunk = data[i:i + 4]
             # Pad to 4 bytes
             chunk = chunk.ljust(4, b"\x00")
-            word = struct.unpack_from("<I", chunk)[0]
+            _word = struct.unpack_from("<I", chunk)[0]  # noqa: F841
             self._qemu.qmp.execute(
                 "human-monitor-command",
                 {"command-line": f"xp /1wx 0x{address + i:08x}"}

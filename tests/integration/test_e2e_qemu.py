@@ -10,7 +10,6 @@ import json
 import os
 import struct
 import subprocess
-import tempfile
 import time
 from pathlib import Path
 
@@ -131,7 +130,7 @@ class TestQEMUBootAndRegisters:
             # Read the expected reset vector from the firmware file itself
             with open(fw, "rb") as f:
                 fw_header = f.read(8)
-            expected_sp = struct.unpack_from("<I", fw_header, 0)[0]
+            _expected_sp = struct.unpack_from("<I", fw_header, 0)[0]
             expected_reset = struct.unpack_from("<I", fw_header, 4)[0]
 
             # PC should match the reset vector (possibly with Thumb bit masked)
@@ -272,7 +271,7 @@ class TestQEMUExecutionAndTriage:
 
             # Read CFSR (should be 0 since we haven't executed)
             cfsr_bytes = gdb.read_memory(0xE000ED28, 4)
-            cfsr = struct.unpack_from("<I", cfsr_bytes)[0]
+            _cfsr = struct.unpack_from("<I", cfsr_bytes)[0]
 
             # Restore PC
             gdb.write_register(15, original_pc)
@@ -516,7 +515,7 @@ class TestCoverageFromQEMU:
             for _ in range(20):
                 try:
                     # Send step command and read the stop reply in one go
-                    response = gdb._send_command("s")
+                    _response = gdb._send_command("s")
                     # Response should be a stop reply like "S05" or "T05..."
                 except Exception:
                     break
@@ -621,7 +620,6 @@ class TestFullPipelineE2E:
         from rtosploit.reporting.models import (
             finding_from_cve,
             finding_from_exploit_result,
-            Finding,
             EngagementReport,
         )
 

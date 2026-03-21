@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import importlib
 from pathlib import Path
 
 import capstone  # noqa: E402 — patch before any rtosploit import
 if not hasattr(capstone, "CS_ARCH_XTENSA"):
     capstone.CS_ARCH_XTENSA = 0xFF  # stub so disasm.py can load
 
-import pytest
 
 from rtosploit.fuzzing.input_injector import FuzzableInput, InputInjector
 from rtosploit.utils.binary import BinaryFormat, FirmwareImage

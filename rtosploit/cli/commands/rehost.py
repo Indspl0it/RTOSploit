@@ -28,7 +28,6 @@ def rehost(ctx, firmware, machine, peripheral_config, auto_mode, save_config, sv
       rtosploit rehost -f fw.elf --auto --save-config my_config.yaml
       rtosploit rehost -f fw.elf --svd STM32F407.svd --engine unicorn
     """
-    import json
 
     # Resolve auto_mode: explicit flag wins, otherwise auto when no config given
     if auto_mode is None:
@@ -108,7 +107,7 @@ def _rehost_rich(ctx, firmware, machine, peripheral_config, auto_mode, save_conf
     console.print("[bold green]RTOSploit Firmware Rehosting[/bold green]")
     console.print(f"  Firmware:     [cyan]{firmware}[/cyan]")
     if auto_mode:
-        console.print(f"  Mode:         [cyan]auto-detect[/cyan]")
+        console.print("  Mode:         [cyan]auto-detect[/cyan]")
         if machine != "auto":
             console.print(f"  Machine:      [cyan]{machine}[/cyan] (override)")
     else:
@@ -195,7 +194,7 @@ def _save_auto_config(engine_obj, save_path: str) -> None:
     from pathlib import Path
     from rtosploit.peripherals.auto_config import serialize_config
 
-    summary = engine_obj.get_auto_summary()
+    _summary = engine_obj.get_auto_summary()  # noqa: F841
     dispatcher = engine_obj.dispatcher
     if dispatcher is None:
         return

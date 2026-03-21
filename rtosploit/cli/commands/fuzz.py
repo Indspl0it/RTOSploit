@@ -6,8 +6,6 @@ import click
 from rich.console import Console
 
 from rtosploit.interactive.dashboard import (
-    build_dashboard_table as _build_dashboard_table,
-    count_files as _count_files,
     run_dashboard as _run_dashboard,
 )
 

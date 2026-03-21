@@ -3,17 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
 from rtosploit.analysis.detection.evidence import (
     ConfidenceLevel,
-    DetectionResult,
     Evidence,
     EvidenceType,
-    EVIDENCE_WEIGHTS,
-    PeripheralDetection,
 )
 from rtosploit.analysis.detection.aggregator import (
     ALL_LAYERS,
@@ -24,7 +21,6 @@ from rtosploit.analysis.detection.aggregator import (
 from rtosploit.utils.binary import (
     BinaryFormat,
     FirmwareImage,
-    MemorySection,
 )
 
 

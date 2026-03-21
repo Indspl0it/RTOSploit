@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import hashlib
-import os
 import random
 import threading
 from pathlib import Path
-from typing import Optional
 
 from rtosploit.coverage.bitmap_reader import BITMAP_SIZE
 

@@ -48,7 +48,7 @@ def emulate(ctx, firmware, machine, gdb, gdb_port, serial_port, svd):
     console.print("\n[dim]Starting QEMU... (Ctrl+C to stop)[/dim]")
 
     try:
-        from rtosploit.config import load_config, RTOSploitConfig
+        from rtosploit.config import load_config
         from rtosploit.emulation.qemu import QEMUInstance
 
         # Load config and apply CLI overrides

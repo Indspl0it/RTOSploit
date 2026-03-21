@@ -5,7 +5,6 @@ from __future__ import annotations
 import struct
 from unittest.mock import MagicMock
 
-import pytest
 
 from rtosploit.peripherals.mmio_intercept import MMIOInterceptor
 from rtosploit.peripherals.models.mmio_fallback import (

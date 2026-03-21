@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
 import questionary
 from rich.console import Console
@@ -164,4 +163,4 @@ def load_firmware_interactive(session: InteractiveSession, console: Console) -> 
 
     # 9. Store in session
     session.firmware = ctx
-    console.print(f"[green]Firmware loaded successfully.[/green]")
+    console.print("[green]Firmware loaded successfully.[/green]")

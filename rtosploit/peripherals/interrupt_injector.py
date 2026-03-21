@@ -7,7 +7,7 @@ Uses the firmware's vector table to identify which ISRs are registered.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional, Protocol
 
 from rtosploit.peripherals.svd_model import SVDDevice

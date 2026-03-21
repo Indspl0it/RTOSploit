@@ -14,7 +14,7 @@ VULNRANGE_DIR = PROJECT_ROOT / "vulnrange"
 
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from rtosploit.vulnrange import RangeManifest, VulnRangeManager, list_ranges, load_manifest
+from rtosploit.vulnrange import RangeManifest, VulnRangeManager, list_ranges, load_manifest  # noqa: E402
 
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────

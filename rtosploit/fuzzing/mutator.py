@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import random
 import struct
-from typing import Optional
 
 
 # Interesting values for injection (common boundary/edge cases)

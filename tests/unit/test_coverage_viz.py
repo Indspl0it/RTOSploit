@@ -7,7 +7,6 @@ Uses self-contained ARM Thumb firmware bytes for disassembly tests.
 from __future__ import annotations
 
 import struct
-import tempfile
 from pathlib import Path
 
 import pytest

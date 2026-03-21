@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import time
-import threading
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
-import pytest
 
 # Patch targets — all imports inside rtosploit.fuzzing.engine
 _ENGINE = "rtosploit.fuzzing.engine"

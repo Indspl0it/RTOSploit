@@ -210,7 +210,7 @@ class TestAnalysisIntegration:
         try:
             from rtosploit.analysis.fingerprint import RTOSFingerprint
             fp = RTOSFingerprint()
-            result = fp.detect(data)
+            _result = fp.detect(data)
             # May detect or return None — just shouldn't crash
         except Exception as e:
             pytest.skip(f"Fingerprint not available: {e}")
@@ -220,7 +220,7 @@ class TestAnalysisIntegration:
             data = f.read()
         try:
             from rtosploit.analysis.heap_detect import detect_heap_variant
-            result = detect_heap_variant(data)
+            _result = detect_heap_variant(data)
             # May be None if not detected
         except Exception as e:
             pytest.skip(f"Heap detect not available: {e}")
@@ -230,7 +230,7 @@ class TestAnalysisIntegration:
             data = f.read()
         try:
             from rtosploit.analysis.mpu_check import check_mpu_config
-            result = check_mpu_config(data)
+            _result = check_mpu_config(data)
         except Exception as e:
             pytest.skip(f"MPU check not available: {e}")
 

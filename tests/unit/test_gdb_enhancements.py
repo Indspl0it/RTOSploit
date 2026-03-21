@@ -6,7 +6,7 @@ All tests use mocks — no real QEMU process is required.
 from __future__ import annotations
 
 import socket
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock
 
 import pytest
 

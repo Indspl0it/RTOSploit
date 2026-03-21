@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 
 from rtosploit.peripherals.svd_parser import parse_svd_string
 

@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
 
 from rtosploit.peripherals.svd_model import (
-    SVDField,
     SVDPeripheral,
     SVDRegister,
 )

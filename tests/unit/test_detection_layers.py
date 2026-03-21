@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import patch, MagicMock
 
-import pytest
 
-from rtosploit.analysis.detection.evidence import Evidence, EvidenceType, EVIDENCE_WEIGHTS
+from rtosploit.analysis.detection.evidence import EvidenceType, EVIDENCE_WEIGHTS
 from rtosploit.utils.binary import (
     BinaryFormat,
     FirmwareImage,

@@ -13,12 +13,11 @@ import time
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
-from rtosploit.peripherals.config import PeripheralConfig, SymbolResolver
+from rtosploit.peripherals.config import PeripheralConfig
 from rtosploit.peripherals.dispatcher import InterceptDispatcher
 from rtosploit.peripherals.model import PeripheralModel
 
 if TYPE_CHECKING:
-    from rtosploit.emulation.gdb import GDBClient
     from rtosploit.emulation.qemu import QEMUInstance
     from rtosploit.peripherals.models.mmio_fallback import CompositeMMIOHandler
 
@@ -259,7 +258,6 @@ class RehostingEngine:
         svd_models: dict[str, SVDPeripheralModel] = {}
         try:
             from rtosploit.peripherals.svd_cache import SVDCache
-            from rtosploit.peripherals.svd_model import SVDDevice
 
             effective_mcu = summary.get("mcu_family", "unknown")
             cache = SVDCache()

@@ -193,7 +193,7 @@ def _generate_reset_value_stub(periph):
     lines.append("")
 
     # Struct definition
-    lines.append(f"typedef struct {{")
+    lines.append("typedef struct {")
     if registers:
         for reg in registers:
             ctype = _c_type_for_size(reg["size"])
@@ -227,7 +227,7 @@ def _generate_read_write_stub(periph):
     lines.append("")
 
     # Struct definition
-    lines.append(f"typedef struct {{")
+    lines.append("typedef struct {")
     if registers:
         for reg in registers:
             ctype = _c_type_for_size(reg["size"])
@@ -294,7 +294,7 @@ def _generate_fuzzer_stub(periph):
     lines.append("")
 
     # Struct definition
-    lines.append(f"typedef struct {{")
+    lines.append("typedef struct {")
     if registers:
         for reg in registers:
             ctype = _c_type_for_size(reg["size"])
@@ -371,7 +371,7 @@ def _generate_peripheral_map_header(peripherals, mode):
     lines.append("} peripheral_entry_t;")
     lines.append("")
 
-    lines.append(f"static const peripheral_entry_t peripheral_map[] = {{")
+    lines.append("static const peripheral_entry_t peripheral_map[] = {")
     for periph in peripherals:
         name_lower = periph["name"].lower()
         # Estimate peripheral size from max register offset + 4
@@ -502,7 +502,7 @@ def svd_download(ctx, device, output_dir):
 
     if not output_json:
         console.print(f"[dim]Vendor detected: [cyan]{vendor}[/cyan] for device [cyan]{device}[/cyan][/dim]")
-        console.print(f"[dim]Searching CMSIS-SVD repository...[/dim]")
+        console.print("[dim]Searching CMSIS-SVD repository...[/dim]")
 
     downloaded_path = None
     last_error = None
@@ -543,7 +543,7 @@ def svd_download(ctx, device, output_dir):
             console.print(f"[dim]Vendor: {vendor}[/dim]")
             console.print(f"[dim]Tried: {', '.join(candidates)}[/dim]")
             console.print(f"[dim]Last error: {last_error}[/dim]")
-            console.print(f"\n[yellow]You can browse available SVDs at:[/yellow]")
+            console.print("\n[yellow]You can browse available SVDs at:[/yellow]")
             console.print(f"  [cyan]https://github.com/cmsis-svd/cmsis-svd-data/tree/main/{vendor}[/cyan]")
         raise SystemExit(1)
 

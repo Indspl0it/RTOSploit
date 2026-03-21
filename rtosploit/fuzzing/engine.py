@@ -5,9 +5,9 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable
 
 from rtosploit.config import RTOSploitConfig
 from rtosploit.emulation.qemu import QEMUInstance
@@ -387,8 +387,8 @@ class FuzzEngine:
         start_time = time.monotonic()
 
         # Aggregated stats across all workers
-        agg_lock = threading.Lock()
-        agg_stats = {
+        _agg_lock = threading.Lock()
+        _agg_stats = {
             "executions": 0,
             "crashes": 0,
             "unique_crashes": 0,

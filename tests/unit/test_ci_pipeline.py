@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import struct
-from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 from click.testing import CliRunner

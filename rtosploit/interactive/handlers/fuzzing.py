@@ -28,7 +28,7 @@ def handle_fuzz(session: InteractiveSession, console: Console) -> None:
     except (ValueError, TypeError):
         timeout_int = 60
 
-    corpus_dir = questionary.path(
+    _corpus_dir = questionary.path(
         "Seed corpus directory (optional, leave empty to skip):",
         only_directories=True,
     ).ask()

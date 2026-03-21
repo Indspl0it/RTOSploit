@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import os
 import shutil
-import signal
 import subprocess
 import tempfile
 import time
-import uuid
 from pathlib import Path
 from typing import Any, Optional
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -24,7 +24,7 @@ class StubUART(PeripheralModel):
 
     @hal_handler("HAL_UART_Transmit")
     def handle_tx(self, cpu: CPUState) -> HandlerResult:
-        buf = cpu.get_arg(1)
+        _buf = cpu.get_arg(1)
         length = cpu.get_arg(2)
         return HandlerResult(intercept=True, return_value=length)
 

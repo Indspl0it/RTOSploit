@@ -9,7 +9,6 @@ RTOS targets.
 from __future__ import annotations
 
 import struct
-from typing import Optional
 
 
 class ROPHelper:

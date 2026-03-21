@@ -157,7 +157,8 @@ def vulnrange_solve(ctx, range_id):
 
     console.print(f"[bold]Running exploit:[/bold] [cyan]{exploit_path}[/cyan]")
 
-    import subprocess, sys
+    import subprocess
+    import sys
     result = subprocess.run([sys.executable, str(exploit_path)], capture_output=False)
 
     if result.returncode == 0:

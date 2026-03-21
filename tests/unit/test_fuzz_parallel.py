@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import threading
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
-import pytest
 
 _ENGINE = "rtosploit.fuzzing.engine"
 
@@ -132,7 +131,7 @@ class TestParallelWorkersSpawned:
                 jobs=4,
                 exec_timeout=0.05,
             )
-            stats = engine.run(timeout=1, corpus_dir="/tmp/corpus", crash_dir="/tmp/crashes")
+            _stats = engine.run(timeout=1, corpus_dir="/tmp/corpus", crash_dir="/tmp/crashes")
 
         # With jobs=4, QEMUInstance should be constructed 4 times
         assert qemu_cls.call_count == 4
@@ -166,7 +165,6 @@ class TestThreadSafeCorpus:
         """Multiple threads adding to corpus should not corrupt state."""
         from rtosploit.fuzzing.corpus import CorpusManager
         import tempfile
-        import os
 
         with tempfile.TemporaryDirectory() as tmpdir:
             corpus = CorpusManager(tmpdir, bitmap_size=256)

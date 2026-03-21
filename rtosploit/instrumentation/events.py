@@ -239,29 +239,48 @@ def classify_cfsr(cfsr: int) -> list[str]:
     faults: list[str] = []
 
     # MemManage (bits 7:0)
-    if cfsr & (1 << 0):  faults.append("IACCVIOL")
-    if cfsr & (1 << 1):  faults.append("DACCVIOL")
-    if cfsr & (1 << 3):  faults.append("MUNSTKERR")
-    if cfsr & (1 << 4):  faults.append("MSTKERR")
-    if cfsr & (1 << 5):  faults.append("MLSPERR")
-    if cfsr & (1 << 7):  faults.append("MMARVALID")
+    if cfsr & (1 << 0):
+        faults.append("IACCVIOL")
+    if cfsr & (1 << 1):
+        faults.append("DACCVIOL")
+    if cfsr & (1 << 3):
+        faults.append("MUNSTKERR")
+    if cfsr & (1 << 4):
+        faults.append("MSTKERR")
+    if cfsr & (1 << 5):
+        faults.append("MLSPERR")
+    if cfsr & (1 << 7):
+        faults.append("MMARVALID")
 
     # BusFault (bits 15:8)
-    if cfsr & (1 << 8):  faults.append("IBUSERR")
-    if cfsr & (1 << 9):  faults.append("PRECISERR")
-    if cfsr & (1 << 10): faults.append("IMPRECISERR")
-    if cfsr & (1 << 11): faults.append("UNSTKERR")
-    if cfsr & (1 << 12): faults.append("STKERR")
-    if cfsr & (1 << 13): faults.append("LSPERR")
-    if cfsr & (1 << 15): faults.append("BFARVALID")
+    if cfsr & (1 << 8):
+        faults.append("IBUSERR")
+    if cfsr & (1 << 9):
+        faults.append("PRECISERR")
+    if cfsr & (1 << 10):
+        faults.append("IMPRECISERR")
+    if cfsr & (1 << 11):
+        faults.append("UNSTKERR")
+    if cfsr & (1 << 12):
+        faults.append("STKERR")
+    if cfsr & (1 << 13):
+        faults.append("LSPERR")
+    if cfsr & (1 << 15):
+        faults.append("BFARVALID")
 
     # UsageFault (bits 31:16)
-    if cfsr & (1 << 16): faults.append("UNDEFINSTR")
-    if cfsr & (1 << 17): faults.append("INVSTATE")
-    if cfsr & (1 << 18): faults.append("INVPC")
-    if cfsr & (1 << 19): faults.append("NOCP")
-    if cfsr & (1 << 24): faults.append("UNALIGNED")
-    if cfsr & (1 << 25): faults.append("DIVBYZERO")
+    if cfsr & (1 << 16):
+        faults.append("UNDEFINSTR")
+    if cfsr & (1 << 17):
+        faults.append("INVSTATE")
+    if cfsr & (1 << 18):
+        faults.append("INVPC")
+    if cfsr & (1 << 19):
+        faults.append("NOCP")
+    if cfsr & (1 << 24):
+        faults.append("UNALIGNED")
+    if cfsr & (1 << 25):
+        faults.append("DIVBYZERO")
 
     return faults
 

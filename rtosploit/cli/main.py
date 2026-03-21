@@ -9,7 +9,6 @@ import click
 from rich.console import Console
 from rich.panel import Panel
 
-from .. import __version__
 
 console = Console()
 err_console = Console(stderr=True)
@@ -66,20 +65,20 @@ def cli(
 
 
 # Register all subcommands
-from rtosploit.cli.commands.emulate import emulate
-from rtosploit.cli.commands.fuzz import fuzz
-from rtosploit.cli.commands.exploit import exploit
-from rtosploit.cli.commands.payload import payload
-from rtosploit.cli.commands.analyze import analyze
-from rtosploit.cli.commands.svd import svd
-from rtosploit.cli.commands.vulnrange import vulnrange
-from rtosploit.cli.commands.console_cmd import console_cmd
-from rtosploit.cli.commands.report import report
-from rtosploit.cli.commands.triage import triage
-from rtosploit.cli.commands.coverage import coverage
-from rtosploit.cli.commands.cve import cve
-from rtosploit.cli.commands.scan import scan
-from rtosploit.cli.commands.rehost import rehost
+from rtosploit.cli.commands.emulate import emulate  # noqa: E402
+from rtosploit.cli.commands.fuzz import fuzz  # noqa: E402
+from rtosploit.cli.commands.exploit import exploit  # noqa: E402
+from rtosploit.cli.commands.payload import payload  # noqa: E402
+from rtosploit.cli.commands.analyze import analyze  # noqa: E402
+from rtosploit.cli.commands.svd import svd  # noqa: E402
+from rtosploit.cli.commands.vulnrange import vulnrange  # noqa: E402
+from rtosploit.cli.commands.console_cmd import console_cmd  # noqa: E402
+from rtosploit.cli.commands.report import report  # noqa: E402
+from rtosploit.cli.commands.triage import triage  # noqa: E402
+from rtosploit.cli.commands.coverage import coverage  # noqa: E402
+from rtosploit.cli.commands.cve import cve  # noqa: E402
+from rtosploit.cli.commands.scan import scan  # noqa: E402
+from rtosploit.cli.commands.rehost import rehost  # noqa: E402
 
 cli.add_command(emulate)
 cli.add_command(fuzz)
