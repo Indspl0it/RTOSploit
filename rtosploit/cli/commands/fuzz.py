@@ -73,8 +73,8 @@ def fuzz(ctx, firmware, machine, rtos, output, seeds, timeout, jobs,
             else:
                 console.print("\n[yellow]No fuzzable input points discovered. Falling back to fixed inject address.[/yellow]")
 
-        # Infer machine from MCU family if not provided
-        if machine is None:
+        # Infer machine from MCU family if not provided (QEMU engine only)
+        if machine is None and engine != "unicorn":
             _MCU_TO_MACHINE = {
                 "stm32": "mps2-an385",
                 "nrf52": "microbit",
@@ -86,13 +86,15 @@ def fuzz(ctx, firmware, machine, rtos, output, seeds, timeout, jobs,
             if machine is None:
                 raise click.UsageError(
                     f"Could not infer QEMU machine for MCU family '{fp.mcu_family}'. "
-                    "Please specify --machine explicitly."
+                    "Please specify --machine explicitly, or use --engine unicorn."
                 )
             if not output_json:
                 console.print(f"  Machine:     [cyan]{machine}[/cyan] (auto-detected from {fp.mcu_family})")
+        elif engine == "unicorn" and not output_json:
+            console.print("  Engine:      [cyan]unicorn (PIP + FERMCov)[/cyan]")
 
-    if machine is None and not auto_mode:
-        raise click.UsageError("--machine is required unless --auto is used.")
+    if machine is None and not auto_mode and engine != "unicorn":
+        raise click.UsageError("--machine is required unless --auto or --engine unicorn is used.")
 
     # Parse hex addresses
     inject_addr_int = int(inject_addr, 16) if inject_addr else 0x20010000

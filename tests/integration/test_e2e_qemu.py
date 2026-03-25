@@ -315,8 +315,8 @@ class TestExploitToReport:
         """Run freertos/mpu_bypass exploit, convert to Finding, generate SARIF."""
         fw = firmware_path("CVE-2021-43997")
 
-        from rtosploit.exploits.runner import run_exploit
-        result = run_exploit(
+        from rtosploit.scanners.runner import run_scan
+        result = run_scan(
             "freertos/mpu_bypass",
             {"firmware": fw, "machine": "mps2-an385"},
         )
@@ -366,8 +366,8 @@ class TestExploitToReport:
         """Run exploit, generate HTML report, verify it's self-contained."""
         fw = firmware_path("CVE-2021-43997")
 
-        from rtosploit.exploits.runner import run_exploit
-        result = run_exploit(
+        from rtosploit.scanners.runner import run_scan
+        result = run_scan(
             "freertos/mpu_bypass",
             {"firmware": fw, "machine": "mps2-an385"},
         )
@@ -607,8 +607,8 @@ class TestFullPipelineE2E:
         assert cve_result.highest_severity in ("critical", "high")
 
         # Step 3: Run exploit
-        from rtosploit.exploits.runner import run_exploit
-        exploit_result = run_exploit(
+        from rtosploit.scanners.runner import run_scan
+        exploit_result = run_scan(
             "freertos/mpu_bypass",
             {"firmware": fw, "machine": "mps2-an385"},
         )

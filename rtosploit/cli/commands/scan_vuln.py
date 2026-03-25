@@ -1,0 +1,239 @@
+"""rtosploit scan-vuln — list/info/run vulnerability scanner modules."""
+import click
+from rich.console import Console
+from rich.table import Table
+
+console = Console()
+
+
+@click.group("scan-vuln")
+def scan_vuln():
+    """Vulnerability scanner modules for RTOS targets.
+
+    \b
+    Subcommands:
+      list    List available scanner modules
+      info    Show module details
+      run     Execute a vulnerability scan
+      check   Non-destructive vulnerability check
+    """
+    pass
+
+
+@scan_vuln.command("list")
+@click.pass_context
+def scan_vuln_list(ctx):
+    """List all registered vulnerability scanner modules."""
+    from rtosploit.scanners.registry import ScannerRegistry
+    registry = ScannerRegistry()
+    registry.discover()
+
+    output_json = ctx.obj.get("output_json", False)
+
+    modules = []
+    for key, cls in registry._modules.items():
+        inst = cls()
+        modules.append({
+            "path": key,
+            "name": inst.name,
+            "rtos": inst.rtos,
+            "category": inst.category,
+            "reliability": inst.reliability,
+            "cve": inst.cve,
+        })
+
+    if output_json:
+        import json
+        click.echo(json.dumps(modules, indent=2))
+        return
+
+    table = Table(title="RTOSploit Vulnerability Scanners", show_header=True, header_style="bold cyan")
+    table.add_column("Module Path", style="cyan", no_wrap=True)
+    table.add_column("Name", style="white")
+    table.add_column("RTOS", style="green")
+    table.add_column("Category", style="yellow")
+    table.add_column("Reliability", style="magenta")
+    table.add_column("CVE", style="dim")
+
+    for m in sorted(modules, key=lambda x: x["path"]):
+        table.add_row(
+            m["path"],
+            m["name"],
+            m["rtos"],
+            m["category"],
+            m["reliability"],
+            m["cve"] if m["cve"] else "-",
+        )
+
+    console.print(table)
+    console.print(f"\n[dim]{len(modules)} modules registered.[/dim]")
+
+
+@scan_vuln.command("info")
+@click.argument("module_path")
+@click.pass_context
+def scan_vuln_info(ctx, module_path):
+    """Show detailed information about a scanner module.
+
+    MODULE_PATH: e.g. freertos/heap_overflow
+    """
+    from rtosploit.scanners.registry import ScannerRegistry
+    registry = ScannerRegistry()
+    registry.discover()
+
+    cls = registry.get(module_path)
+    if cls is None:
+        console.print(f"[red]Module not found: {module_path}[/red]")
+        console.print("[dim]Run 'rtosploit scan-vuln list' to see available modules.[/dim]")
+        raise SystemExit(1)
+
+    inst = cls()
+    output_json = ctx.obj.get("output_json", False)
+
+    def _serialize_option(opt):
+        """Serialize option default to JSON-safe value."""
+        val = opt.default
+        if val is None:
+            return None  # JSON null, not "None"
+        if opt.type == "int":
+            return int(val) if not isinstance(val, int) else val
+        if opt.type == "bool":
+            return bool(val)
+        return str(val)
+
+    info = {
+        "path": module_path,
+        "name": inst.name,
+        "rtos": inst.rtos,
+        "category": inst.category,
+        "reliability": inst.reliability,
+        "cve": inst.cve,
+        "description": inst.description,
+        "options": {k: _serialize_option(v) for k, v in inst.options.items()},
+    }
+
+    if output_json:
+        import json
+        click.echo(json.dumps(info, indent=2))
+        return
+
+    from rich.panel import Panel
+    console.print(Panel(
+        f"[bold]{inst.name}[/bold]\n\n{inst.description}",
+        title=f"[cyan]{module_path}[/cyan]",
+        border_style="cyan",
+    ))
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Option", style="cyan", no_wrap=True)
+    table.add_column("Type", style="yellow")
+    table.add_column("Default", style="green")
+    table.add_column("Required", style="red")
+    table.add_column("Description", style="white")
+
+    for opt_name, opt in inst.options.items():
+        table.add_row(
+            opt_name,
+            opt.type if isinstance(opt.type, str) else str(opt.type),
+            str(opt.default) if opt.default is not None else "-",
+            "YES" if opt.required else "no",
+            opt.description,
+        )
+
+    console.print(table)
+
+    if inst.cve:
+        console.print(f"\n[bold]CVE:[/bold] {inst.cve}")
+
+
+@scan_vuln.command("run")
+@click.argument("module_path")
+@click.option("--firmware", "-f", required=True, type=click.Path(exists=True), help="Firmware binary")
+@click.option("--machine", "-m", required=True, type=str, help="QEMU machine name")
+@click.option("--option", "-o", "options", multiple=True, metavar="KEY=VALUE", help="Set module option (repeatable)")
+@click.option("--payload", type=str, default=None, help="Payload name or path")
+@click.pass_context
+def scan_vuln_run(ctx, module_path, firmware, machine, options, payload):
+    """Execute a vulnerability scanner module against a firmware target.
+
+    MODULE_PATH: e.g. freertos/heap_overflow
+
+    \b
+    Example:
+      rtosploit scan-vuln run freertos/mpu_bypass --firmware fw.bin --machine mps2-an385
+    """
+    from rtosploit.scanners.runner import run_scan
+
+    # Parse options
+    parsed_opts = {}
+    for opt in options:
+        if "=" not in opt:
+            console.print(f"[red]Invalid option format: {opt} (expected KEY=VALUE)[/red]")
+            raise SystemExit(1)
+        k, v = opt.split("=", 1)
+        parsed_opts[k.strip()] = v.strip()
+
+    parsed_opts.setdefault("firmware", firmware)
+    parsed_opts.setdefault("machine", machine)
+    if payload:
+        parsed_opts["payload"] = payload
+
+    console.print(f"[bold green]Running:[/bold green] {module_path}")
+    console.print(f"  Firmware: [cyan]{firmware}[/cyan]")
+    console.print(f"  Machine:  [cyan]{machine}[/cyan]")
+
+    result = run_scan(module_path, parsed_opts)
+
+    output_json = ctx.obj.get("output_json", False)
+    if output_json:
+        import json
+        click.echo(json.dumps(result.to_dict(), indent=2))
+        return
+
+    if result.status == "success":
+        console.print("\n[bold green][+] Scan succeeded![/bold green]")
+    else:
+        console.print(f"\n[bold red][-] Scan {result.status}[/bold red]")
+
+    if result.notes:
+        for note in result.notes:
+            console.print(f"  [dim]{note}[/dim]")
+
+
+@scan_vuln.command("check")
+@click.argument("module_path")
+@click.option("--firmware", "-f", required=True, type=click.Path(exists=True), help="Firmware binary")
+@click.option("--machine", "-m", required=True, type=str, help="QEMU machine name")
+@click.pass_context
+def scan_vuln_check(ctx, module_path, firmware, machine):
+    """Run non-destructive vulnerability check.
+
+    MODULE_PATH: e.g. freertos/mpu_bypass
+    """
+    from rtosploit.scanners.registry import ScannerRegistry
+    from rtosploit.scanners.target import ScanTarget
+
+    registry = ScannerRegistry()
+    registry.discover()
+
+    cls = registry.get(module_path)
+    if cls is None:
+        console.print(f"[red]Module not found: {module_path}[/red]")
+        raise SystemExit(1)
+
+    # Static analysis only — no QEMU needed for check
+    target = ScanTarget.from_firmware_path(
+        firmware_path=firmware,
+        machine_name=machine,
+        start_qemu=False,
+    )
+    inst = cls()
+    inst.set_option("firmware", firmware)
+    inst.set_option("machine", machine)
+
+    result = inst.check(target)
+
+    if result:
+        console.print(f"[green][+] Target appears vulnerable to {module_path}[/green]")
+    else:
+        console.print("[yellow][-] Target does not appear vulnerable (or check inconclusive)[/yellow]")

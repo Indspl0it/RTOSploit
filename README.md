@@ -7,7 +7,7 @@
   <a href="#installation"><img src="https://img.shields.io/badge/python-3.10%2B-blue?logo=python&logoColor=white" alt="Python 3.10+"/></a>
   <img src="https://img.shields.io/badge/tests-1528%20passing-brightgreen" alt="Tests"/>
   <img src="https://img.shields.io/badge/license-Apache--2.0-orange" alt="License"/>
-  <img src="https://img.shields.io/badge/exploits-15%20modules-red" alt="Exploits"/>
+  <img src="https://img.shields.io/badge/scanners-15%20modules-red" alt="Vulnerability Scanners"/>
 </p>
 
 <p align="center">
@@ -31,12 +31,12 @@ RTOSploit is a firmware security testing framework for embedded RTOS systems. It
 | RTOS fingerprint | Yes (strings + symbols) | Yes | N/A |
 | CVE correlation | Yes (59 bundled CVEs) | Yes | N/A |
 | Peripheral detection | Yes (6-layer engine) | Yes | N/A |
-| Exploit assessment | Yes (15 modules, static) | Yes | N/A |
+| Vulnerability scanning | Yes (15 modules, static) | Yes | N/A |
 | Payload/ROP generation | Yes | Yes | N/A |
 | Emulate and boot | No (needs matching machine) | Yes | Yes (model-free) |
 | Coverage-guided fuzzing | No | Yes (~3-5 exec/sec) | Yes (~200+ exec/sec) |
 
-> **On real hardware firmware:** Static analysis, CVE correlation, exploit assessment, and payload generation work on any firmware binary. Emulation and fuzzing require either a matching QEMU machine or the Unicorn engine with Peripheral Input Playback (PIP), which drives all peripheral I/O from fuzz input without hardware models.
+> **On real hardware:** Static analysis, CVE correlation, vulnerability scanning, and payload generation work on any firmware binary. Emulation and fuzzing require either a matching QEMU machine or the Unicorn engine with Peripheral Input Playback (PIP), which drives all peripheral I/O from fuzz input without hardware models.
 
 ---
 
@@ -49,7 +49,7 @@ RTOSploit is a firmware security testing framework for embedded RTOS systems. It
 5. [Quick Start](#quick-start)
 6. [Emulation Engines](#emulation-engines)
 7. [CLI Reference](#cli-reference)
-8. [Exploit Modules](#exploit-modules)
+8. [Vulnerability Scanners](#vulnerability-scanners)
 9. [Machine Configurations](#machine-configurations)
 10. [Configuration](#configuration)
 11. [CI/CD Integration](#cicd-integration)
@@ -68,7 +68,7 @@ Embedded RTOS firmware (FreeRTOS, ThreadX, Zephyr) runs on billions of devices �
 
 1. **Analyze** — fingerprint RTOS, version, MCU, heap allocator, MPU config, peripherals
 2. **Correlate CVEs** — match against 59 bundled vulnerabilities from NVD
-3. **Assess vulnerabilities** — run 15 exploit modules (heap corruption, MPU bypass, BLE overflows)
+3. **Assess vulnerabilities** — run 15 vulnerability scanners (heap corruption, MPU bypass, BLE overflows)
 4. **Generate payloads** — ARM Thumb2/RISC-V shellcode, ROP chains, protocol packets
 5. **Emulate** — boot firmware in QEMU (interactive) or Unicorn (high-speed)
 6. **Fuzz** — coverage-guided fuzzing with crash deduplication and interrupt injection
@@ -98,8 +98,8 @@ RTOSploit has two execution paths depending on the use case:
                     ┌─────────────────┼─────────────────┐
                     ▼                 ▼                  ▼
             ┌──────────────┐  ┌─────────────┐  ┌──────────────┐
-            │   Static     │  │    CVE      │  │   Exploit    │
-            │  Analysis    │  │ Correlation │  │  Assessment  │
+            │   Static     │  │    CVE      │  │ Vulnerability│
+            │  Analysis    │  │ Correlation │  │   Scanners   │
             │              │  │             │  │              │
             │ Fingerprint  │  │ 59 bundled  │  │ 15 modules   │
             │ Heap detect  │  │ CVEs from   │  │ FreeRTOS (6) │
@@ -189,7 +189,7 @@ Works on any firmware binary — no QEMU, no symbols required.
 
 ### Vulnerability Assessment and Payload Generation
 
-15 exploit modules that detect vulnerability patterns via static analysis and generate concrete artifacts.
+15 vulnerability scanner modules that detect vulnerability patterns via static analysis and generate concrete artifacts.
 
 | Category | Count | Produces |
 |----------|-------|----------|
@@ -402,7 +402,7 @@ rtosploit fuzz -f real-product.elf --engine unicorn --timeout 300
 |---------|-------------|
 | `analyze` | Static firmware analysis (RTOS, heap, MPU, peripherals) |
 | `cve` | CVE correlation (`scan`, `search`, `update`) |
-| `exploit` | Vulnerability assessment (`list`, `info`, `check`, `run`) |
+| `scan-vuln` | Vulnerability scanning (`list`, `info`, `check`, `run`) |
 | `payload` | Shellcode and ROP generation (`shellcode`, `rop`) |
 | `emulate` | QEMU emulation with optional GDB |
 | `rehost` | Peripheral-aware rehosting (QEMU or Unicorn) |
@@ -419,7 +419,7 @@ Run `rtosploit <command> --help` for detailed options.
 
 ---
 
-## Exploit Modules
+## Vulnerability Scanners
 
 ### FreeRTOS (6 modules)
 
@@ -531,7 +531,7 @@ rtosploit/
 ├── peripherals/        Peripheral modeling (HAL database, SVD, PIP handler, rehosting)
 ├── fuzzing/            Fuzzing engine (corpus, mutator, crash reporter, Unicorn worker)
 ├── coverage/           Coverage collection (AFL bitmap, FERMCov)
-├── exploits/           Exploit modules (FreeRTOS, ThreadX, Zephyr)
+├── scanners/           Vulnerability scanners (FreeRTOS, ThreadX, Zephyr)
 ├── emulation/          QEMU orchestration (process, GDB, QMP, machines)
 ├── cve/                CVE database and correlation
 ├── payloads/           Shellcode and ROP generation
@@ -543,7 +543,7 @@ rtosploit/
 └── vulnrange/          CVE reproduction labs
 ```
 
-See [docs/writing-exploits.md](docs/writing-exploits.md) for the exploit module development guide.
+See [docs/writing-scanners.md](docs/writing-scanners.md) for the vulnerability scanner module development guide.
 
 ---
 
@@ -555,7 +555,7 @@ See [docs/writing-exploits.md](docs/writing-exploits.md) for the exploit module 
 
 **Fuzzer reports 0 exec/sec** — Firmware may not boot. Try `rtosploit emulate` first to verify. For real hardware firmware, use `--engine unicorn`.
 
-**Exploit check says "not_vulnerable"** — Modules assess binary patterns. A CVE match by version doesn't guarantee the vulnerable code path is present — the vendor may have backported fixes.
+**Scan check says "not_vulnerable"** — Modules assess binary patterns. A CVE match by version doesn't guarantee the vulnerable code path is present — the vendor may have backported fixes.
 
 **Unicorn not available** — Install with `pip install unicorn`. QEMU mode works without it.
 

@@ -23,8 +23,8 @@ console = Console()
 
 
 def _try_parse_finding(data: dict) -> Finding | None:
-    """Attempt to parse a JSON dict as a FuzzReport or ExploitResult finding."""
-    # FuzzReport has crash_type; ExploitResult has module + status + technique
+    """Attempt to parse a JSON dict as a FuzzReport or ScanResult finding."""
+    # FuzzReport has crash_type; ScanResult has module + status + technique
     if "crash_type" in data:
         return finding_from_fuzz_report(data)
     if "module" in data and "technique" in data:

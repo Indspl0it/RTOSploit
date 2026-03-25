@@ -2,13 +2,13 @@
 import pytest
 from pathlib import Path
 
-# --- ExploitRegistry + Module Integration ---
+# --- ScannerRegistry + Module Integration ---
 
-class TestExploitRegistryIntegration:
+class TestScannerRegistryIntegration:
     def test_discover_and_list(self):
         """Registry discovers all expected modules."""
-        from rtosploit.exploits.registry import ExploitRegistry
-        r = ExploitRegistry()
+        from rtosploit.scanners.registry import ScannerRegistry
+        r = ScannerRegistry()
         r.discover()
         paths = set(r._modules.keys())
         # At minimum these should exist
@@ -18,23 +18,23 @@ class TestExploitRegistryIntegration:
         assert "zephyr/syscall_race" in paths
 
     def test_search_by_cve(self):
-        from rtosploit.exploits.registry import ExploitRegistry
-        r = ExploitRegistry()
+        from rtosploit.scanners.registry import ScannerRegistry
+        r = ScannerRegistry()
         r.discover()
         results = r.search("CVE-2021-43997")
         assert len(results) >= 1
         assert any("mpu_bypass" in path for path in results)
 
     def test_search_by_rtos(self):
-        from rtosploit.exploits.registry import ExploitRegistry
-        r = ExploitRegistry()
+        from rtosploit.scanners.registry import ScannerRegistry
+        r = ScannerRegistry()
         r.discover()
         results = r.search("freertos")
         assert len(results) >= 4  # At least 4 FreeRTOS modules
 
     def test_get_module_by_path(self):
-        from rtosploit.exploits.registry import ExploitRegistry
-        r = ExploitRegistry()
+        from rtosploit.scanners.registry import ScannerRegistry
+        r = ScannerRegistry()
         r.discover()
         cls = r.get("freertos/mpu_bypass")
         inst = cls()
@@ -42,8 +42,8 @@ class TestExploitRegistryIntegration:
         assert inst.category == "mpu_bypass"
 
     def test_module_has_required_options(self):
-        from rtosploit.exploits.registry import ExploitRegistry
-        r = ExploitRegistry()
+        from rtosploit.scanners.registry import ScannerRegistry
+        r = ScannerRegistry()
         r.discover()
         for path, cls in r._modules.items():
             inst = cls()
@@ -52,8 +52,8 @@ class TestExploitRegistryIntegration:
             assert "machine" in inst.options, f"{path} missing 'machine' option"
 
     def test_module_reliability_values(self):
-        from rtosploit.exploits.registry import ExploitRegistry
-        r = ExploitRegistry()
+        from rtosploit.scanners.registry import ScannerRegistry
+        r = ScannerRegistry()
         r.discover()
         valid = {"low", "medium", "high", "excellent", "good", "fair", "unreliable"}
         for path, cls in r._modules.items():
@@ -61,8 +61,8 @@ class TestExploitRegistryIntegration:
             assert inst.reliability in valid, f"{path} has invalid reliability: {inst.reliability}"
 
     def test_module_categories(self):
-        from rtosploit.exploits.registry import ExploitRegistry
-        r = ExploitRegistry()
+        from rtosploit.scanners.registry import ScannerRegistry
+        r = ScannerRegistry()
         r.discover()
         valid = {
             "heap_corruption", "tcb_overwrite", "mpu_bypass", "isr_hijack",
@@ -238,20 +238,20 @@ class TestAnalysisIntegration:
 # --- CLI + Module Integration ---
 
 class TestCLIModuleIntegration:
-    def test_exploit_list_via_cli(self):
+    def test_scan_vuln_list_via_cli(self):
         from click.testing import CliRunner
         from rtosploit.cli.main import cli
         runner = CliRunner()
-        result = runner.invoke(cli, ["exploit", "list"])
+        result = runner.invoke(cli, ["scan-vuln", "list"])
         assert result.exit_code == 0
         assert "freertos" in result.output.lower()
 
-    def test_exploit_list_json_parseable(self):
+    def test_scan_vuln_list_json_parseable(self):
         import json
         from click.testing import CliRunner
         from rtosploit.cli.main import cli
         runner = CliRunner()
-        result = runner.invoke(cli, ["--json", "exploit", "list"])
+        result = runner.invoke(cli, ["--json", "scan-vuln", "list"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert isinstance(data, list)

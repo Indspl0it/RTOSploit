@@ -417,7 +417,7 @@ rtosploit triage \
 
 ### Report Generation
 
-Generate reports from collected crash and exploit data:
+Generate reports from collected crash and scan data:
 
 ```bash
 # Both SARIF and HTML

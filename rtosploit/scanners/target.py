@@ -1,0 +1,134 @@
+"""ScanTarget — aggregates firmware image + RTOS analysis + optional QEMU instance."""
+
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+from typing import Optional, TYPE_CHECKING
+
+from rtosploit.utils.binary import FirmwareImage, load_firmware
+from rtosploit.analysis.fingerprint import RTOSFingerprint, fingerprint_firmware
+from rtosploit.analysis.heap_detect import HeapInfo, detect_heap
+from rtosploit.analysis.mpu_check import MPUConfig, check_mpu
+
+if TYPE_CHECKING:
+    pass
+
+logger = logging.getLogger(__name__)
+
+
+class ScanTarget:
+    """Aggregates all information about a target for a scanner module.
+
+    Wraps QEMUInstance + FirmwareImage + RTOS analysis results.
+    """
+
+    def __init__(
+        self,
+        firmware: FirmwareImage,
+        machine_name: str,
+        fingerprint: Optional[RTOSFingerprint] = None,
+        heap_info: Optional[HeapInfo] = None,
+        mpu_config: Optional[MPUConfig] = None,
+        qemu=None,  # QEMUInstance (typed loosely to avoid circular import issues)
+    ):
+        self.firmware = firmware
+        self.machine_name = machine_name
+        self.fingerprint = fingerprint
+        self.heap_info = heap_info
+        self.mpu_config = mpu_config
+        self._qemu = qemu
+        self._memory_ops = None
+
+    @classmethod
+    def from_firmware_path(
+        cls,
+        firmware_path: str | Path,
+        machine_name: str,
+        start_qemu: bool = False,
+        config=None,
+    ) -> "ScanTarget":
+        """Load firmware, run analysis, optionally start QEMU."""
+        path = Path(firmware_path)
+        firmware = load_firmware(str(path))
+        fingerprint = fingerprint_firmware(firmware)
+        heap_info = detect_heap(firmware, fingerprint)
+        mpu_config = check_mpu(firmware)
+        logger.info(
+            f"Target: {fingerprint.rtos_type} "
+            f"{fingerprint.version or 'unknown version'}"
+        )
+
+        qemu = None
+        if start_qemu:
+            from rtosploit.emulation.qemu import QEMUInstance
+            qemu = QEMUInstance(config)
+            qemu.start(str(path), machine_name, gdb=True)
+
+        return cls(
+            firmware=firmware,
+            machine_name=machine_name,
+            fingerprint=fingerprint,
+            heap_info=heap_info,
+            mpu_config=mpu_config,
+            qemu=qemu,
+        )
+
+    def read_memory(self, address: int, size: int) -> bytes:
+        if self._qemu is None:
+            raise RuntimeError("No QEMU instance — call from_firmware_path(start_qemu=True)")
+        from rtosploit.emulation.memory import MemoryOps
+        if self._memory_ops is None:
+            self._memory_ops = MemoryOps(self._qemu)
+        return self._memory_ops.read(address, size)
+
+    def write_memory(self, address: int, data: bytes) -> None:
+        if self._qemu is None:
+            raise RuntimeError("No QEMU instance")
+        from rtosploit.emulation.memory import MemoryOps
+        if self._memory_ops is None:
+            self._memory_ops = MemoryOps(self._qemu)
+        self._memory_ops.write(address, data)
+
+    def get_registers(self) -> dict[str, int]:
+        if self._qemu is None:
+            raise RuntimeError("No QEMU instance")
+        from rtosploit.emulation.memory import MemoryOps
+        if self._memory_ops is None:
+            self._memory_ops = MemoryOps(self._qemu)
+        return self._memory_ops.read_all_registers()
+
+    def snapshot(self, name: str) -> None:
+        if self._qemu is None:
+            raise RuntimeError("No QEMU instance")
+        from rtosploit.emulation.snapshot import SnapshotManager
+        SnapshotManager().save(self._qemu, name)
+
+    def restore(self, name: str) -> None:
+        if self._qemu is None:
+            raise RuntimeError("No QEMU instance")
+        from rtosploit.emulation.snapshot import SnapshotManager
+        SnapshotManager().load(self._qemu, name)
+
+    def close(self) -> None:
+        if self._qemu is not None:
+            self._qemu.stop()
+            self._qemu = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
+    @property
+    def rtos_type(self) -> str:
+        return self.fingerprint.rtos_type if self.fingerprint else "unknown"
+
+    @property
+    def architecture(self) -> str:
+        # FirmwareImage may have an architecture field; fall back to armv7m
+        return getattr(self.firmware, "architecture", "armv7m")
+
+    def __repr__(self) -> str:
+        return f"ScanTarget(rtos={self.rtos_type}, machine={self.machine_name})"

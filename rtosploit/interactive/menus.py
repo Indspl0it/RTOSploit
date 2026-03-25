@@ -34,7 +34,7 @@ MAIN_MENU: list[MenuCategory] = [
     ]),
     MenuCategory("SECURITY TESTING", [
         MenuItem("2", "Quick Scan", "Full CI pipeline scan on any firmware", "quick_scan"),
-        MenuItem("3", "Exploit Console", "Metasploit-style interactive REPL", "console"),
+        MenuItem("3", "Scanner Console", "Metasploit-style interactive REPL", "console"),
     ]),
     MenuCategory("INTELLIGENCE", [
         MenuItem("4", "Search CVE Database", "Search by CVE ID, keyword, or RTOS", "cve_search"),
@@ -63,7 +63,7 @@ FIRMWARE_MENU: list[MenuCategory] = [
     ]),
     MenuCategory("SECURITY TESTING", [
         MenuItem("4", "Fuzz Firmware", "Grey-box fuzzing with live dashboard", "fuzz"),
-        MenuItem("5", "Run Exploit Modules", "Browse and execute exploit modules", "exploits"),
+        MenuItem("5", "Run Vulnerability Scanners", "Browse and execute vulnerability scanners", "exploits"),
         MenuItem("6", "Full Security Scan", "Fingerprint + CVE + fuzz + triage + report", "full_scan"),
     ]),
     MenuCategory("ANALYSIS", [

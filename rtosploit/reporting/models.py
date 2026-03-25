@@ -10,12 +10,19 @@ from typing import Any, Optional
 
 @dataclass
 class Finding:
-    """A single security finding (crash, exploit, or CVE match)."""
+    """A single security finding (crash, exploit/scanner, or CVE match).
+
+    Fields cover all current RTOSploit capabilities:
+    - PIP fuzzing crashes (StopReason, blocks_executed, engine_type)
+    - QEMU/Unicorn dual-engine results
+    - Vulnerability scanner (formerly exploit module) results
+    - CVE database matches
+    """
 
     id: str
     title: str
     severity: str  # info | low | medium | high | critical
-    category: str  # crash | exploit | cve
+    category: str  # crash | scanner | exploit | cve
     description: str
     crash_type: Optional[str] = None
     pc: Optional[int] = None
@@ -31,6 +38,77 @@ class Finding:
     exploit_module: Optional[str] = None
     exploit_status: Optional[str] = None
     timestamp: int = 0
+    # --- New fields for PIP / Unicorn / dual-engine ---
+    stop_reason: Optional[str] = None
+    engine_type: Optional[str] = None  # "qemu" | "unicorn"
+    blocks_executed: int = 0
+    pip_stats: Optional[dict] = None  # PIP handler stats dict
+
+
+@dataclass
+class CoverageStats:
+    """Structured coverage statistics for a fuzz campaign."""
+
+    edge_count: int = 0
+    total_hits: int = 0
+    bitmap_size: int = 65536
+    coverage_type: str = "basic"  # "basic" | "fermcov"
+    coverage_pct: float = 0.0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "edge_count": self.edge_count,
+            "total_hits": self.total_hits,
+            "bitmap_size": self.bitmap_size,
+            "coverage_type": self.coverage_type,
+            "coverage_pct": self.coverage_pct,
+        }
+
+
+@dataclass
+class FuzzCampaignStats:
+    """Campaign-level fuzzing statistics."""
+
+    executions: int = 0
+    crashes: int = 0
+    unique_crashes: int = 0
+    exec_per_sec: float = 0.0
+    elapsed_seconds: float = 0.0
+    corpus_size: int = 0
+    engine_type: str = "qemu"  # "qemu" | "unicorn"
+    coverage: Optional[CoverageStats] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "executions": self.executions,
+            "crashes": self.crashes,
+            "unique_crashes": self.unique_crashes,
+            "exec_per_sec": round(self.exec_per_sec, 1),
+            "elapsed_seconds": round(self.elapsed_seconds, 1),
+            "corpus_size": self.corpus_size,
+            "engine_type": self.engine_type,
+        }
+        if self.coverage is not None:
+            result["coverage"] = self.coverage.to_dict()
+        return result
+
+
+@dataclass
+class PeripheralSummary:
+    """Summary of peripheral detection results for the report."""
+
+    total_detected: int = 0
+    layers_run: list[str] = field(default_factory=list)
+    mcu_family: str = "unknown"
+    peripherals: list[dict[str, Any]] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "total_detected": self.total_detected,
+            "layers_run": self.layers_run,
+            "mcu_family": self.mcu_family,
+            "peripherals": self.peripherals,
+        }
 
 
 @dataclass
@@ -44,7 +122,9 @@ class EngagementReport:
     target_version: Optional[str] = None
     target_architecture: str = "armv7m"
     findings: list[Finding] = field(default_factory=list)
-    coverage_stats: Optional[dict] = None
+    coverage_stats: Optional[CoverageStats] = None
+    fuzz_stats: Optional[FuzzCampaignStats] = None
+    peripheral_summary: Optional[PeripheralSummary] = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -53,6 +133,7 @@ def finding_from_fuzz_report(data: dict) -> Finding:
 
     Expected fields: crash_type, severity, pc, fault_address, registers,
     stack_trace, input_data, reproducer_path, dedup_hash, id, timestamp.
+    Also accepts: stop_reason, engine_type, blocks_executed, pip_stats.
     """
     finding_id = data.get("id") or hashlib.sha256(
         str(data).encode()
@@ -62,16 +143,26 @@ def finding_from_fuzz_report(data: dict) -> Finding:
     severity = data.get("severity", "medium")
     pc = data.get("pc")
     fault_address = data.get("fault_address")
+    stop_reason = data.get("stop_reason")
+    engine_type = data.get("engine_type")
+    blocks_executed = data.get("blocks_executed", 0)
+    pip_stats = data.get("pip_stats")
 
     title = f"Crash: {crash_type}"
     if pc is not None:
         title += f" at PC=0x{pc:08x}"
 
     description_parts = [f"Crash type: {crash_type}"]
+    if stop_reason:
+        description_parts.append(f"Stop reason: {stop_reason}")
+    if engine_type:
+        description_parts.append(f"Engine: {engine_type}")
     if pc is not None:
         description_parts.append(f"Program counter: 0x{pc:08x}")
     if fault_address is not None:
         description_parts.append(f"Fault address: 0x{fault_address:08x}")
+    if blocks_executed:
+        description_parts.append(f"Blocks executed: {blocks_executed}")
     if data.get("reproducer_path"):
         description_parts.append(f"Reproducer: {data['reproducer_path']}")
 
@@ -90,6 +181,10 @@ def finding_from_fuzz_report(data: dict) -> Finding:
         reproducer_path=data.get("reproducer_path"),
         dedup_hash=data.get("dedup_hash"),
         timestamp=data.get("timestamp", 0),
+        stop_reason=stop_reason,
+        engine_type=engine_type,
+        blocks_executed=blocks_executed,
+        pip_stats=pip_stats,
     )
 
 
@@ -108,6 +203,10 @@ def finding_from_triaged_crash(triaged: "TriagedCrash") -> Finding:  # noqa: F82
     fault_address = crash_data.get("fault_address", 0)
     registers = crash_data.get("registers", {})
     stack_trace = crash_data.get("backtrace", [])
+    stop_reason = crash_data.get("stop_reason")
+    engine_type = crash_data.get("engine_type")
+    blocks_executed = crash_data.get("blocks_executed", 0)
+    pip_stats = crash_data.get("pip_stats")
 
     # Map exploitability to severity
     _SEVERITY = {
@@ -131,10 +230,16 @@ def finding_from_triaged_crash(triaged: "TriagedCrash") -> Finding:  # noqa: F82
         f"Crash type: {crash_type}",
         f"Exploitability: {tr.exploitability.value}",
     ]
+    if stop_reason:
+        description_parts.append(f"Stop reason: {stop_reason}")
+    if engine_type:
+        description_parts.append(f"Engine: {engine_type}")
     if pc:
         description_parts.append(f"Program counter: 0x{pc:08x}")
     if fault_address:
         description_parts.append(f"Fault address: 0x{fault_address:08x}")
+    if blocks_executed:
+        description_parts.append(f"Blocks executed: {blocks_executed}")
     if tr.reasons:
         description_parts.append(f"Reasons: {'; '.join(tr.reasons)}")
     if tr.cfsr_flags:
@@ -159,13 +264,18 @@ def finding_from_triaged_crash(triaged: "TriagedCrash") -> Finding:  # noqa: F82
         exploitability=tr.exploitability.value,
         cfsr_flags=tr.cfsr_flags,
         timestamp=crash_data.get("timestamp", 0),
+        stop_reason=stop_reason,
+        engine_type=engine_type,
+        blocks_executed=blocks_executed,
+        pip_stats=pip_stats,
     )
 
 
 def finding_from_exploit_result(result_dict: dict) -> Finding:
-    """Convert an ExploitResult.to_dict() dict to a Finding.
+    """Convert a ScanResult.to_dict() dict to a Finding.
 
     Expected fields: module, status, target_rtos, cve, technique, notes.
+    Works for both legacy exploit modules and renamed scanner modules.
     """
     module = result_dict.get("module", "unknown")
     status = result_dict.get("status", "unknown")
@@ -177,7 +287,7 @@ def finding_from_exploit_result(result_dict: dict) -> Finding:
         f"{module}:{cve or technique}".encode()
     ).hexdigest()[:16]
 
-    title = f"Exploit: {module}"
+    title = f"Scanner: {module}"
     if cve:
         title += f" ({cve})"
 
@@ -197,11 +307,14 @@ def finding_from_exploit_result(result_dict: dict) -> Finding:
     if notes:
         description_parts.append(f"Notes: {'; '.join(notes)}")
 
+    # Use "scanner" category if available, fall back to "exploit" for compat
+    category = result_dict.get("category", "scanner")
+
     return Finding(
         id=finding_id,
         title=title,
         severity=severity,
-        category="exploit",
+        category=category,
         description="\n".join(description_parts),
         cve=cve,
         exploit_module=module,

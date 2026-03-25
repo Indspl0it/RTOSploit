@@ -1,6 +1,6 @@
 """CLI command tests using Click test runner.
 
-Covers all major subcommands: emulate, fuzz, exploit, payload, analyze, svd, vulnrange.
+Covers all major subcommands: emulate, fuzz, scan-vuln, payload, analyze, svd, vulnrange.
 Uses Click's CliRunner for isolation — no QEMU required.
 """
 from __future__ import annotations
@@ -76,7 +76,7 @@ def test_help_lists_all_subcommands(runner):
     """--help lists all registered subcommands."""
     result = runner.invoke(cli, ["--help"])
     assert result.exit_code == 0
-    for cmd in ["emulate", "fuzz", "exploit", "payload", "analyze", "svd", "vulnrange"]:
+    for cmd in ["emulate", "fuzz", "scan-vuln", "payload", "analyze", "svd", "vulnrange"]:
         assert cmd in result.output
 
 
@@ -156,34 +156,34 @@ def test_fuzz_json_output(runner, tiny_firmware, tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# exploit
+# scan-vuln
 # ---------------------------------------------------------------------------
 
-def test_exploit_help(runner):
-    """exploit --help mentions list/info/run/check subcommands."""
-    result = runner.invoke(cli, ["exploit", "--help"])
+def test_scan_vuln_help(runner):
+    """scan-vuln --help mentions list/info/run/check subcommands."""
+    result = runner.invoke(cli, ["scan-vuln", "--help"])
     assert result.exit_code == 0
     for sub in ["list", "info", "run", "check"]:
         assert sub in result.output
 
 
-def test_exploit_list_no_crash(runner):
-    """exploit list runs without crashing (table or empty)."""
-    result = runner.invoke(cli, ["exploit", "list"])
+def test_scan_vuln_list_no_crash(runner):
+    """scan-vuln list runs without crashing (table or empty)."""
+    result = runner.invoke(cli, ["scan-vuln", "list"])
     assert result.exit_code == 0
 
 
-def test_exploit_list_json(runner):
-    """exploit list --json outputs a valid JSON array."""
-    result = runner.invoke(cli, ["--json", "exploit", "list"])
+def test_scan_vuln_list_json(runner):
+    """scan-vuln list --json outputs a valid JSON array."""
+    result = runner.invoke(cli, ["--json", "scan-vuln", "list"])
     assert result.exit_code == 0
     data = json.loads(result.output)
     assert isinstance(data, list)
 
 
-def test_exploit_list_json_module_fields(runner):
-    """exploit list --json items have expected fields."""
-    result = runner.invoke(cli, ["--json", "exploit", "list"])
+def test_scan_vuln_list_json_module_fields(runner):
+    """scan-vuln list --json items have expected fields."""
+    result = runner.invoke(cli, ["--json", "scan-vuln", "list"])
     assert result.exit_code == 0
     data = json.loads(result.output)
     if data:  # at least one module registered
@@ -195,33 +195,33 @@ def test_exploit_list_json_module_fields(runner):
         assert "reliability" in item
 
 
-def test_exploit_info_nonexistent(runner):
-    """exploit info on unknown module exits with code 1."""
-    result = runner.invoke(cli, ["exploit", "info", "nonexistent/bogus"])
+def test_scan_vuln_info_nonexistent(runner):
+    """scan-vuln info on unknown module exits with code 1."""
+    result = runner.invoke(cli, ["scan-vuln", "info", "nonexistent/bogus"])
     assert result.exit_code == 1
 
 
-def test_exploit_info_nonexistent_message(runner):
-    """exploit info on unknown module shows error message."""
-    result = runner.invoke(cli, ["exploit", "info", "nonexistent/bogus"])
+def test_scan_vuln_info_nonexistent_message(runner):
+    """scan-vuln info on unknown module shows error message."""
+    result = runner.invoke(cli, ["scan-vuln", "info", "nonexistent/bogus"])
     assert "not found" in result.output.lower() or result.exit_code == 1
 
 
-def test_exploit_list_help(runner):
-    """exploit list --help works."""
-    result = runner.invoke(cli, ["exploit", "list", "--help"])
+def test_scan_vuln_list_help(runner):
+    """scan-vuln list --help works."""
+    result = runner.invoke(cli, ["scan-vuln", "list", "--help"])
     assert result.exit_code == 0
 
 
-def test_exploit_run_help(runner):
-    """exploit run --help works."""
-    result = runner.invoke(cli, ["exploit", "run", "--help"])
+def test_scan_vuln_run_help(runner):
+    """scan-vuln run --help works."""
+    result = runner.invoke(cli, ["scan-vuln", "run", "--help"])
     assert result.exit_code == 0
 
 
-def test_exploit_check_help(runner):
-    """exploit check --help works."""
-    result = runner.invoke(cli, ["exploit", "check", "--help"])
+def test_scan_vuln_check_help(runner):
+    """scan-vuln check --help works."""
+    result = runner.invoke(cli, ["scan-vuln", "check", "--help"])
     assert result.exit_code == 0
 
 
@@ -528,9 +528,9 @@ def test_vulnrange_hint_nonexistent(runner):
 # Global flags
 # ---------------------------------------------------------------------------
 
-def test_json_flag_exploit_list(runner):
-    """--json flag on exploit list produces JSON array."""
-    result = runner.invoke(cli, ["--json", "exploit", "list"])
+def test_json_flag_scan_vuln_list(runner):
+    """--json flag on scan-vuln list produces JSON array."""
+    result = runner.invoke(cli, ["--json", "scan-vuln", "list"])
     assert result.exit_code == 0
     data = json.loads(result.output)
     assert isinstance(data, list)

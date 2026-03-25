@@ -19,7 +19,7 @@ class ConsoleState:
     # Active QEMU instances (PID -> instance)
     active_qemu: dict[int, Any] = field(default_factory=dict)
 
-    # Last exploit result
+    # Last scan result
     last_result: Optional[Any] = None
 
     # History of commands executed

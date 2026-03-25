@@ -1,0 +1,177 @@
+"""Bridge between scanner modules and live QEMU/GDB execution.
+
+Takes ScanResult artifacts (payloads, addresses, ROP chains) and
+injects them into running firmware via GDB memory writes.
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass
+from typing import Optional, Protocol
+
+from rtosploit.scanners.base import ScanResult
+
+logger = logging.getLogger(__name__)
+
+
+class GDBInterface(Protocol):
+    """Protocol for GDB operations.
+
+    Matches the subset of :class:`rtosploit.emulation.gdb.GDBClient` used by
+    the injector.  ``write_register`` accepts a register *number* (int), not a
+    name, to stay compatible with the RSP ``P`` command used by GDBClient.
+    """
+
+    def write_memory(self, address: int, data: bytes) -> None: ...
+    def read_memory(self, address: int, size: int) -> bytes: ...
+    def write_register(self, reg_num: int, value: int) -> None: ...
+    def read_register(self, name: str) -> int: ...
+    def set_breakpoint(self, address: int) -> None: ...
+    def continue_execution(self) -> None: ...
+
+
+@dataclass
+class InjectionResult:
+    """Result of injecting an exploit into live firmware."""
+
+    success: bool
+    payload_written: bool = False
+    payload_address: int = 0
+    payload_size: int = 0
+    crash_detected: bool = False
+    pc_after: int = 0
+    detail: str = ""
+
+
+def _extract_payload(result: ScanResult) -> Optional[bytes]:
+    """Extract payload bytes from a ScanResult.
+
+    ScanResult stores payload metadata (``payload_delivered``,
+    ``payload_type``) but the raw bytes are conveyed via its ``notes``
+    list or ``registers_at_payload`` dict.  Callers should pass the
+    raw payload explicitly when possible; this helper returns *None*
+    when no raw bytes can be recovered from the result alone.
+    """
+    # ScanResult doesn't carry raw payload bytes natively.
+    return None
+
+
+class ScanInjector:
+    """Injects exploit artifacts into running firmware via GDB."""
+
+    def __init__(self, gdb: GDBInterface) -> None:
+        self._gdb = gdb
+
+    def inject_payload(
+        self,
+        result: ScanResult,
+        payload: Optional[bytes] = None,
+        target_address: Optional[int] = None,
+    ) -> InjectionResult:
+        """Inject a scan result's payload into firmware memory.
+
+        Args:
+            result: The ScanResult from a successful scan run.
+            payload: Raw payload bytes to inject.  Required because
+                ScanResult carries metadata but not the raw bytes.
+            target_address: Memory address to write the payload to.
+
+        Returns:
+            InjectionResult describing what happened.
+        """
+        data = payload or _extract_payload(result)
+        if not data:
+            return InjectionResult(
+                success=False,
+                detail="No payload bytes provided and none recoverable from ScanResult",
+            )
+
+        addr = target_address
+        if not addr:
+            return InjectionResult(
+                success=False,
+                detail="No target address specified",
+            )
+
+        try:
+            self._gdb.write_memory(addr, data)
+            logger.info(
+                "Payload written: %d bytes at 0x%08X", len(data), addr
+            )
+            return InjectionResult(
+                success=True,
+                payload_written=True,
+                payload_address=addr,
+                payload_size=len(data),
+            )
+        except Exception as e:
+            return InjectionResult(
+                success=False,
+                detail=f"GDB write failed: {e}",
+            )
+
+    def inject_and_trigger(
+        self,
+        result: ScanResult,
+        payload: Optional[bytes] = None,
+        target_address: Optional[int] = None,
+        trigger_address: Optional[int] = None,
+    ) -> InjectionResult:
+        """Inject payload and continue execution to trigger it.
+
+        Optionally set a breakpoint at *trigger_address* to observe
+        whether the exploit lands at the expected location.
+
+        Args:
+            result: The ScanResult from a successful scan run.
+            payload: Raw payload bytes to inject.
+            target_address: Memory address to write the payload to.
+            trigger_address: Address to set a post-injection breakpoint
+                (e.g. the expected exploit landing point).
+
+        Returns:
+            InjectionResult with execution outcome details.
+        """
+        inj = self.inject_payload(result, payload, target_address)
+        if not inj.success:
+            return inj
+
+        # Set breakpoint at expected exploit landing point if provided
+        landing = trigger_address
+        if landing:
+            try:
+                self._gdb.set_breakpoint(landing)
+            except Exception as e:
+                logger.warning("Could not set landing breakpoint: %s", e)
+
+        # Continue execution
+        try:
+            self._gdb.continue_execution()
+            inj.pc_after = self._gdb.read_register("pc")
+            if landing and inj.pc_after == landing:
+                inj.crash_detected = False
+                inj.detail = f"Exploit landed at expected address 0x{landing:08X}"
+            else:
+                inj.detail = f"Execution stopped at PC=0x{inj.pc_after:08X}"
+        except Exception as e:
+            inj.detail = f"Execution error: {e}"
+
+        return inj
+
+    def verify_corruption(
+        self,
+        address: int,
+        expected: bytes,
+    ) -> bool:
+        """Verify that memory at *address* contains *expected* bytes.
+
+        Useful for confirming that an exploit payload was written
+        correctly or that a target data structure was corrupted as
+        intended.
+        """
+        try:
+            actual = self._gdb.read_memory(address, len(expected))
+            return actual == expected
+        except Exception:
+            return False

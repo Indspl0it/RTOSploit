@@ -13,8 +13,11 @@ from click.testing import CliRunner
 
 from rtosploit.cli.main import cli
 from rtosploit.reporting.models import (
+    CoverageStats,
     EngagementReport,
     Finding,
+    FuzzCampaignStats,
+    PeripheralSummary,
     finding_from_exploit_result,
     finding_from_fuzz_report,
 )
@@ -53,13 +56,38 @@ def sample_finding() -> Finding:
 def sample_exploit_finding() -> Finding:
     return Finding(
         id="exploit-001",
-        title="Exploit: freertos/heap_overflow",
+        title="Scanner: freertos/heap_overflow",
         severity="critical",
-        category="exploit",
+        category="scanner",
         description="Heap overflow exploit",
         cve="CVE-2021-12345",
         exploit_module="freertos/heap_overflow",
         exploit_status="success",
+    )
+
+
+@pytest.fixture
+def sample_pip_finding() -> Finding:
+    """Finding from PIP/Unicorn engine with new fields."""
+    return Finding(
+        id="pip-001",
+        title="Crash: unmapped_access at PC=0x08001000",
+        severity="high",
+        category="crash",
+        description="Unmapped memory access",
+        crash_type="unmapped_access",
+        pc=0x0800_1000,
+        fault_address=0xDEAD_0000,
+        stop_reason="unmapped_access",
+        engine_type="unicorn",
+        blocks_executed=1500,
+        pip_stats={
+            "total_reads": 42,
+            "total_writes": 10,
+            "replay_count": 30,
+            "new_value_count": 12,
+            "replay_percentage": 71.4,
+        },
     )
 
 
@@ -72,6 +100,56 @@ def sample_report(sample_finding, sample_exploit_finding) -> EngagementReport:
         target_rtos="freertos",
         target_architecture="armv7m",
         findings=[sample_finding, sample_exploit_finding],
+    )
+
+
+@pytest.fixture
+def full_report(sample_finding, sample_exploit_finding, sample_pip_finding) -> EngagementReport:
+    """Report with all optional sections populated."""
+    return EngagementReport(
+        engagement_id="full-engagement-1",
+        timestamp=1700000000,
+        target_firmware="test_fw.elf",
+        target_rtos="freertos",
+        target_version="10.4.3",
+        target_architecture="armv7m",
+        findings=[sample_finding, sample_exploit_finding, sample_pip_finding],
+        coverage_stats=CoverageStats(
+            edge_count=1234,
+            total_hits=56789,
+            bitmap_size=65536,
+            coverage_type="fermcov",
+            coverage_pct=1.88,
+        ),
+        fuzz_stats=FuzzCampaignStats(
+            executions=50000,
+            crashes=12,
+            unique_crashes=5,
+            exec_per_sec=833.3,
+            elapsed_seconds=60.0,
+            corpus_size=42,
+            engine_type="unicorn",
+            coverage=CoverageStats(
+                edge_count=1234,
+                total_hits=56789,
+                coverage_type="fermcov",
+                coverage_pct=1.88,
+            ),
+        ),
+        peripheral_summary=PeripheralSummary(
+            total_detected=3,
+            layers_run=["symbol", "register_mmio", "binary_signature"],
+            mcu_family="STM32F4",
+            peripherals=[
+                {"name": "UART1", "type": "uart", "confidence": 1.5,
+                 "confidence_level": "high", "base_address": "0x40011000",
+                 "vendor": "ST", "evidence_count": 4},
+                {"name": "SPI0", "type": "spi", "confidence": 0.8,
+                 "confidence_level": "medium", "base_address": "0x40013000",
+                 "vendor": "ST", "evidence_count": 2},
+            ],
+        ),
+        metadata={"mcu_family": "STM32F4"},
     )
 
 
@@ -99,6 +177,31 @@ def fuzz_report_data() -> dict:
         "reproducer_path": "/tmp/crash_001.bin",
         "dedup_hash": "deadbeef01",
         "input_hash": "cafebabe",
+    }
+
+
+@pytest.fixture
+def fuzz_report_data_pip() -> dict:
+    """Fuzz report data from PIP/Unicorn engine."""
+    return {
+        "id": "pip-fuzz-001",
+        "timestamp": 1700000000,
+        "crash_type": "unmapped_access",
+        "severity": "high",
+        "pc": 0x0800_1000,
+        "fault_address": 0xDEAD_0000,
+        "registers": {"r0": 0x0, "sp": 0x2000_F000},
+        "stack_trace": [],
+        "stop_reason": "unmapped_access",
+        "engine_type": "unicorn",
+        "blocks_executed": 1500,
+        "pip_stats": {
+            "total_reads": 42,
+            "total_writes": 10,
+            "replay_count": 30,
+            "new_value_count": 12,
+            "replay_percentage": 71.4,
+        },
     }
 
 
@@ -141,6 +244,18 @@ class TestFinding:
         assert f.registers == {}
         assert f.stack_trace == []
         assert f.timestamp == 0
+        assert f.stop_reason is None
+        assert f.engine_type is None
+        assert f.blocks_executed == 0
+        assert f.pip_stats is None
+
+    def test_new_fields(self, sample_pip_finding):
+        assert sample_pip_finding.stop_reason == "unmapped_access"
+        assert sample_pip_finding.engine_type == "unicorn"
+        assert sample_pip_finding.blocks_executed == 1500
+        assert sample_pip_finding.pip_stats is not None
+        assert sample_pip_finding.pip_stats["total_reads"] == 42
+        assert sample_pip_finding.pip_stats["replay_percentage"] == 71.4
 
 
 # ---------------------------------------------------------------------------
@@ -157,6 +272,76 @@ class TestEngagementReport:
     def test_empty_report(self, empty_report):
         assert empty_report.findings == []
         assert empty_report.coverage_stats is None
+        assert empty_report.fuzz_stats is None
+        assert empty_report.peripheral_summary is None
+
+    def test_full_report_sections(self, full_report):
+        assert full_report.coverage_stats is not None
+        assert full_report.coverage_stats.edge_count == 1234
+        assert full_report.coverage_stats.coverage_type == "fermcov"
+        assert full_report.fuzz_stats is not None
+        assert full_report.fuzz_stats.executions == 50000
+        assert full_report.fuzz_stats.engine_type == "unicorn"
+        assert full_report.peripheral_summary is not None
+        assert full_report.peripheral_summary.total_detected == 3
+        assert full_report.peripheral_summary.mcu_family == "STM32F4"
+
+
+# ---------------------------------------------------------------------------
+# Structured data models
+# ---------------------------------------------------------------------------
+
+class TestCoverageStats:
+    def test_to_dict(self):
+        cs = CoverageStats(
+            edge_count=100, total_hits=500,
+            coverage_type="fermcov", coverage_pct=0.15,
+        )
+        d = cs.to_dict()
+        assert d["edge_count"] == 100
+        assert d["coverage_type"] == "fermcov"
+        assert d["bitmap_size"] == 65536
+
+    def test_defaults(self):
+        cs = CoverageStats()
+        assert cs.edge_count == 0
+        assert cs.coverage_type == "basic"
+
+
+class TestFuzzCampaignStats:
+    def test_to_dict(self):
+        fs = FuzzCampaignStats(
+            executions=1000, crashes=5, unique_crashes=3,
+            exec_per_sec=166.7, elapsed_seconds=6.0,
+            corpus_size=20, engine_type="unicorn",
+        )
+        d = fs.to_dict()
+        assert d["executions"] == 1000
+        assert d["engine_type"] == "unicorn"
+        assert d["exec_per_sec"] == 166.7
+
+    def test_to_dict_with_coverage(self):
+        fs = FuzzCampaignStats(
+            executions=100,
+            coverage=CoverageStats(edge_count=50),
+        )
+        d = fs.to_dict()
+        assert "coverage" in d
+        assert d["coverage"]["edge_count"] == 50
+
+
+class TestPeripheralSummary:
+    def test_to_dict(self):
+        ps = PeripheralSummary(
+            total_detected=2,
+            layers_run=["symbol", "register_mmio"],
+            mcu_family="STM32F4",
+            peripherals=[{"name": "UART1", "type": "uart"}],
+        )
+        d = ps.to_dict()
+        assert d["total_detected"] == 2
+        assert d["mcu_family"] == "STM32F4"
+        assert len(d["peripherals"]) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -188,14 +373,27 @@ class TestConverters:
         assert f.registers == {}
         assert f.id  # should have an auto-generated id
 
+    def test_finding_from_fuzz_report_pip(self, fuzz_report_data_pip):
+        """Fuzz report from PIP/Unicorn engine includes new fields."""
+        f = finding_from_fuzz_report(fuzz_report_data_pip)
+        assert f.stop_reason == "unmapped_access"
+        assert f.engine_type == "unicorn"
+        assert f.blocks_executed == 1500
+        assert f.pip_stats is not None
+        assert f.pip_stats["total_reads"] == 42
+        assert "Stop reason: unmapped_access" in f.description
+        assert "Engine: unicorn" in f.description
+        assert "Blocks executed: 1500" in f.description
+
     def test_finding_from_exploit_result(self, exploit_result_data):
         f = finding_from_exploit_result(exploit_result_data)
-        assert f.category == "exploit"
+        assert f.category == "scanner"
         assert f.exploit_module == "freertos/tcb_overwrite"
         assert f.exploit_status == "success"
         assert f.cve == "CVE-2023-99999"
         assert f.severity == "critical"  # has CVE
         assert "CVE-2023-99999" in f.title
+        assert "Scanner:" in f.title
 
     def test_finding_from_exploit_result_no_cve(self):
         data = {
@@ -289,6 +487,34 @@ class TestSARIFGenerator:
             data = json.load(f)
         assert data["version"] == "2.1.0"
 
+    def test_pip_finding_properties(self, sample_pip_finding):
+        """SARIF output includes PIP/Unicorn-specific properties."""
+        report = EngagementReport(
+            engagement_id="pip-test", timestamp=0, target_firmware="fw",
+            findings=[sample_pip_finding],
+        )
+        sarif = SARIFGenerator().generate(report)
+        result = sarif["runs"][0]["results"][0]
+        props = result["properties"]
+        assert props["stopReason"] == "unmapped_access"
+        assert props["engineType"] == "unicorn"
+        assert props["blocksExecuted"] == 1500
+        assert props["pipStats"]["total_reads"] == 42
+
+    def test_full_report_run_properties(self, full_report):
+        """SARIF run-level properties include fuzz stats, coverage, peripherals."""
+        sarif = SARIFGenerator().generate(full_report)
+        run = sarif["runs"][0]
+        assert "properties" in run
+        props = run["properties"]
+        assert "fuzzStats" in props
+        assert props["fuzzStats"]["executions"] == 50000
+        assert props["fuzzStats"]["engine_type"] == "unicorn"
+        assert "coverageStats" in props
+        assert props["coverageStats"]["edge_count"] == 1234
+        assert "peripheralSummary" in props
+        assert props["peripheralSummary"]["total_detected"] == 3
+
 
 # ---------------------------------------------------------------------------
 # HTML generator
@@ -317,6 +543,39 @@ class TestHTMLGenerator:
         with open(out) as f:
             content = f.read()
         assert "<!DOCTYPE html>" in content
+
+    def test_full_report_renders_sections(self, full_report):
+        """HTML report renders fuzz stats, coverage, and peripheral sections."""
+        html = HTMLGenerator().generate(full_report)
+        # Fuzz stats section
+        assert "Fuzzing Campaign" in html
+        assert "50000" in html  # executions
+        assert "unicorn" in html  # engine type
+        # Coverage section
+        assert "Coverage" in html
+        assert "1234" in html  # edge count
+        assert "fermcov" in html  # coverage type
+        # Peripheral section
+        assert "Peripheral Detection" in html
+        assert "STM32F4" in html  # MCU family
+        assert "UART1" in html  # detected peripheral
+
+    def test_pip_finding_details_rendered(self, sample_pip_finding):
+        """HTML detail section includes PIP stats and stop reason."""
+        report = EngagementReport(
+            engagement_id="pip-html", timestamp=0, target_firmware="fw",
+            findings=[sample_pip_finding],
+        )
+        html = HTMLGenerator().generate(report)
+        assert "unmapped_access" in html  # stop reason
+        assert "unicorn" in html  # engine
+        assert "1500" in html  # blocks executed
+
+    def test_category_counts_rendered(self, full_report):
+        """HTML report shows category breakdown cards."""
+        html = HTMLGenerator().generate(full_report)
+        assert "crash" in html
+        assert "scanner" in html
 
 
 # ---------------------------------------------------------------------------

@@ -30,21 +30,34 @@ class SARIFGenerator:
         rules = self._build_rules(report.findings)
         results = [self._finding_to_result(f) for f in report.findings]
 
+        run: dict[str, Any] = {
+            "tool": {
+                "driver": {
+                    "name": "RTOSploit",
+                    "version": __version__,
+                    "rules": rules,
+                }
+            },
+            "results": results,
+        }
+
+        # Attach run-level properties for campaign metadata
+        run_properties: dict[str, Any] = {}
+        if report.fuzz_stats is not None:
+            run_properties["fuzzStats"] = report.fuzz_stats.to_dict()
+        if report.coverage_stats is not None:
+            run_properties["coverageStats"] = report.coverage_stats.to_dict()
+        if report.peripheral_summary is not None:
+            run_properties["peripheralSummary"] = report.peripheral_summary.to_dict()
+        if report.metadata:
+            run_properties["metadata"] = report.metadata
+        if run_properties:
+            run["properties"] = run_properties
+
         return {
             "$schema": SARIF_SCHEMA,
             "version": "2.1.0",
-            "runs": [
-                {
-                    "tool": {
-                        "driver": {
-                            "name": "RTOSploit",
-                            "version": __version__,
-                            "rules": rules,
-                        }
-                    },
-                    "results": results,
-                }
-            ],
+            "runs": [run],
         }
 
     def generate_json(self, report: EngagementReport) -> str:
@@ -62,7 +75,7 @@ class SARIFGenerator:
 
     @staticmethod
     def _build_rules(findings: list[Finding]) -> list[dict[str, Any]]:
-        """Build the rules array — one rule per unique dedup_hash."""
+        """Build the rules array -- one rule per unique dedup_hash."""
         seen: dict[str, dict[str, Any]] = {}
         for f in findings:
             rule_id = f.dedup_hash or f.id
@@ -118,6 +131,16 @@ class SARIFGenerator:
             properties["cve"] = finding.cve
         if finding.exploit_module:
             properties["exploitModule"] = finding.exploit_module
+        if finding.stop_reason:
+            properties["stopReason"] = finding.stop_reason
+        if finding.engine_type:
+            properties["engineType"] = finding.engine_type
+        if finding.blocks_executed:
+            properties["blocksExecuted"] = finding.blocks_executed
+        if finding.pip_stats:
+            properties["pipStats"] = finding.pip_stats
+        if finding.exploitability:
+            properties["exploitability"] = finding.exploitability
         if finding.registers:
             properties["registers"] = {
                 k: f"0x{v:08x}" for k, v in finding.registers.items()

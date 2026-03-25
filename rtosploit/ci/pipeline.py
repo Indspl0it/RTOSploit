@@ -1,4 +1,4 @@
-"""CI/CD pipeline — thin orchestrator that ties all RTOSploit phases together."""
+"""CI/CD pipeline -- thin orchestrator that ties all RTOSploit phases together."""
 
 from __future__ import annotations
 
@@ -24,6 +24,7 @@ class CIConfig:
     fail_on: str = "critical"  # critical|high|medium|low|any
     skip_fuzz: bool = False
     skip_cve: bool = False
+    skip_peripherals: bool = False
     minimize: bool = True
     architecture: str = "armv7m"
 
@@ -31,14 +32,17 @@ class CIConfig:
 class CIPipeline:
     """Orchestrates the full RTOSploit security scan pipeline.
 
-    Ties together firmware loading, fingerprinting, CVE correlation,
-    fuzzing, crash triage, and report generation into a single run.
+    Ties together firmware loading, fingerprinting, peripheral detection,
+    CVE correlation, fuzzing, crash triage, and report generation into a
+    single run.
     """
 
     def __init__(self, config: CIConfig) -> None:
         self.config = config
         self.findings: list = []
-        self.coverage_stats: Optional[dict] = None
+        self.coverage_stats: Optional["CoverageStats"] = None  # noqa: F821
+        self.fuzz_stats: Optional["FuzzCampaignStats"] = None  # noqa: F821
+        self.peripheral_summary: Optional["PeripheralSummary"] = None  # noqa: F821
         self.metadata: dict[str, Any] = {}
 
     def run(self) -> int:
@@ -58,29 +62,33 @@ class CIPipeline:
             # Step 2: Fingerprint
             fingerprint = self._fingerprint()
 
-            # Step 3: CVE correlation (if not skipped)
+            # Step 3: Peripheral detection (if not skipped)
+            if not self.config.skip_peripherals:
+                self._detect_peripherals()
+
+            # Step 4: CVE correlation (if not skipped)
             if not self.config.skip_cve:
                 self._correlate_cves(fingerprint)
 
-            # Step 4: Fuzz (if not skipped)
+            # Step 5: Fuzz (if not skipped)
             crash_dir = None
             if not self.config.skip_fuzz:
                 crash_dir = self._fuzz()
 
-            # Step 5: Triage crashes
+            # Step 6: Triage crashes
             if crash_dir:
                 self._triage(crash_dir)
 
-            # Step 6: Build report
+            # Step 7: Build report
             report = self._build_report(fingerprint)
 
-            # Step 7: Generate outputs
+            # Step 8: Generate outputs
             self._generate_outputs(report)
 
             elapsed = time.time() - start_time
             self.metadata["elapsed_seconds"] = round(elapsed, 1)
 
-            # Step 8: Determine exit code
+            # Step 9: Determine exit code
             return self._determine_exit_code()
 
         except Exception as e:
@@ -131,6 +139,50 @@ class CIPipeline:
             logger.warning("Fingerprinting failed: %s", e)
             return {}
 
+    def _detect_peripherals(self) -> None:
+        """Run the multi-layer peripheral detection engine."""
+        try:
+            from rtosploit.analysis.detection import detect_peripherals
+            from rtosploit.reporting.models import PeripheralSummary
+
+            result = detect_peripherals(self._firmware)
+
+            # Build structured peripheral summary for the report
+            periph_list = []
+            for name, det in sorted(
+                result.peripherals.items(), key=lambda x: -x[1].confidence
+            ):
+                periph_list.append({
+                    "name": det.name,
+                    "type": det.peripheral_type,
+                    "confidence": round(det.confidence, 3),
+                    "confidence_level": det.confidence_level.value,
+                    "base_address": (
+                        f"0x{det.base_address:08x}"
+                        if det.base_address is not None else None
+                    ),
+                    "vendor": det.vendor,
+                    "evidence_count": len(det.evidence),
+                })
+
+            self.peripheral_summary = PeripheralSummary(
+                total_detected=len(result.peripherals),
+                layers_run=result.layers_run,
+                mcu_family=result.mcu_family,
+                peripherals=periph_list,
+            )
+
+            self.metadata["mcu_family"] = result.mcu_family
+            self.metadata["peripherals_detected"] = len(result.peripherals)
+            logger.info(
+                "Peripheral detection: %d peripherals, MCU=%s, layers=%s",
+                len(result.peripherals),
+                result.mcu_family,
+                result.layers_run,
+            )
+        except Exception as e:
+            logger.warning("Peripheral detection failed: %s", e)
+
     def _correlate_cves(self, fingerprint: dict) -> None:
         """Correlate firmware fingerprint against the CVE database."""
         from rtosploit.cve.database import CVEDatabase
@@ -139,7 +191,7 @@ class CIPipeline:
 
         rtos = fingerprint.get("rtos", "")
         if not rtos or rtos == "unknown":
-            logger.info("No RTOS identified — skipping CVE correlation")
+            logger.info("No RTOS identified -- skipping CVE correlation")
             return
 
         db = CVEDatabase()
@@ -169,6 +221,8 @@ class CIPipeline:
 
         Returns the crash directory path if crashes are found, else None.
         """
+        from rtosploit.reporting.models import CoverageStats, FuzzCampaignStats
+
         output_dir = Path(self.config.output_dir)
         crashes_dir = output_dir / "crashes"
         corpus_dir = output_dir / "corpus"
@@ -208,6 +262,25 @@ class CIPipeline:
             self.metadata["fuzz_executions"] = final.executions
             self.metadata["fuzz_coverage"] = final.coverage
 
+            # Build structured fuzz stats
+            self.fuzz_stats = FuzzCampaignStats(
+                executions=final.executions,
+                crashes=final.crashes,
+                unique_crashes=final.unique_crashes,
+                exec_per_sec=final.exec_per_sec,
+                elapsed_seconds=final.elapsed,
+                corpus_size=final.corpus_size,
+                engine_type="qemu",
+            )
+
+            # Build structured coverage stats if available
+            if final.coverage > 0:
+                self.coverage_stats = CoverageStats(
+                    edge_count=int(final.coverage),
+                    coverage_pct=final.coverage,
+                    coverage_type="basic",
+                )
+
             # Check for crashes after fuzzing
             if crashes_dir.is_dir():
                 json_files = list(crashes_dir.glob("*.json"))
@@ -218,7 +291,7 @@ class CIPipeline:
                     self.metadata["crash_files_found"] = len(json_files)
                     return str(crashes_dir)
 
-            logger.info("Fuzzer completed — no crashes found")
+            logger.info("Fuzzer completed -- no crashes found")
             return None
 
         logger.info("Fuzzing skipped (fuzz_timeout=0)")
@@ -256,6 +329,8 @@ class CIPipeline:
             target_architecture=self.config.architecture,
             findings=self.findings,
             coverage_stats=self.coverage_stats,
+            fuzz_stats=self.fuzz_stats,
+            peripheral_summary=self.peripheral_summary,
             metadata=self.metadata,
         )
 

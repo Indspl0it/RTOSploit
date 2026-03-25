@@ -1,0 +1,304 @@
+# Writing Vulnerability Scanner Modules
+
+RTOSploit vulnerability scanner modules are self-contained Python classes that subclass `ScannerModule`. The registry discovers them automatically — no registration step is required.
+
+---
+
+## Module Structure
+
+Every module lives in `rtosploit/scanners/<rtos>/my_scanner.py` and follows this pattern:
+
+```python
+from rtosploit.scanners.base import ScannerModule, ScanResult
+from rtosploit.scanners.target import ScanTarget
+
+
+class MyScanner(ScannerModule):
+    # --- Class-level metadata (required) ---
+    name        = "My Scanner Name"
+    description = "What vulnerability this module detects and what exploit artifacts it generates."
+    authors     = ["Your Name"]
+    references  = ["https://example.com/advisory"]
+    rtos        = "freertos"          # freertos | threadx | zephyr | *
+    rtos_versions = ["*"]             # ["10.x", "11.x"] or ["*"] for all
+    architecture  = "armv7m"          # armv7m | armv8m | riscv32 | *
+    category    = "heap_corruption"   # See categories below
+    reliability = "good"             # excellent | good | fair | unreliable
+    cve         = "CVE-2021-XXXXX"   # Optional
+
+    def register_options(self) -> None:
+        """Declare options the user must/can set."""
+        self.add_option(
+            name="firmware",
+            type="path",
+            required=True,
+            default=None,
+            description="Path to the target firmware binary",
+        )
+        self.add_option(
+            name="machine",
+            type="str",
+            required=False,
+            default="mps2-an385",
+            description="QEMU machine name",
+        )
+        self.add_option(
+            name="payload_address",
+            type="int",
+            required=False,
+            default=0x20001000,
+            description="Address to redirect execution (hex)",
+        )
+
+    def check(self, target: ScanTarget) -> bool:
+        """
+        Non-destructive check: return True if the target is likely vulnerable.
+
+        This must NOT execute any exploit payload. It should only inspect
+        memory, binary patterns, or RTOS version information.
+        """
+        firmware = self._get_option("firmware")
+        # Example: check for a vulnerable function pattern in the binary
+        from rtosploit.utils.binary import load_firmware
+        from rtosploit.analysis.fingerprint import fingerprint_firmware
+        image = load_firmware(firmware)
+        fp = fingerprint_firmware(image)
+        return fp.rtos_type == "freertos" and fp.version is not None
+
+    def exploit(self, target: ScanTarget) -> ScanResult:
+        """
+        Generate exploit artifacts (payload, addresses, chain) for the target.
+        Return a ScanResult describing what was produced.
+        """
+        firmware = self._get_option("firmware")
+        machine  = self._get_option("machine")
+        addr     = int(self._get_option("payload_address"), 0)
+
+        # --- your vulnerability exploitation logic here ---
+        success = self._do_exploitation(firmware, machine, addr)
+
+        return ScanResult(
+            module=f"{self.rtos}/{self.name}",
+            status="success" if success else "failure",
+            target_rtos=self.rtos,
+            architecture=self.architecture,
+            technique="heap_overflow_into_tcb",
+            payload_delivered=success,
+            payload_type="shellcode",
+            achieved=["code_execution"] if success else [],
+            registers_at_payload={"pc": addr, "lr": 0xFFFFFFFF},
+            notes=["Corrupted heap block header at offset 0x40"],
+            cve=self.cve,
+        )
+
+    def requirements(self) -> list[str]:
+        """
+        List capabilities this module needs.
+
+        Return a list of strings from: 'qemu', 'gdb', 'network'
+        Return an empty list if the module has no special requirements.
+        """
+        return ["qemu"]
+
+    def cleanup(self) -> None:
+        """Release any resources acquired during check() or exploit()."""
+        # Stop QEMU instances, close sockets, etc.
+        pass
+
+    def _do_exploitation(self, firmware: str, machine: str, addr: int) -> bool:
+        """Internal helper — not part of the ScannerModule interface."""
+        # ... implementation ...
+        return True
+```
+
+---
+
+## Option Types
+
+When calling `self.add_option()`, the `type` field controls validation:
+
+| Type | Validation | Example |
+|------|-----------|---------|
+| `str` | Any string | `"mps2-an385"` |
+| `int` | Must parse as integer | `"64"`, `"0x20001000"` |
+| `bool` | `true/false/yes/no/1/0` | `"true"` |
+| `float` | Must parse as float | `"3.14"` |
+| `port` | Integer 1–65535 | `"4444"` |
+| `path` | Any string (no existence check) | `"/path/to/fw.bin"` |
+
+Retrieve option values in `check()` and `exploit()`:
+
+```python
+value = self._get_option("option_name")
+```
+
+---
+
+## Scanner Categories
+
+Use one of the following strings for the `category` class attribute:
+
+| Category | Description |
+|----------|-------------|
+| `heap_corruption` | Heap allocator exploitation (overflow, use-after-free) |
+| `stack_overflow` | Stack buffer overflow |
+| `mpu_bypass` | ARM MPU protection circumvention |
+| `isr_hijack` | Interrupt Service Routine table manipulation |
+| `tcb_overwrite` | Task Control Block corruption |
+| `race_condition` | Time-of-check/time-of-use races |
+| `boundary_bypass` | Memory boundary or privilege boundary bypass |
+| `network` | Network stack vulnerabilities |
+| `bluetooth` | Bluetooth LE/Classic stack vulnerabilities |
+| `rop` | Return-Oriented Programming chains |
+
+---
+
+## Reliability Ratings
+
+| Rating | Meaning |
+|--------|---------|
+| `excellent` | Reliable detection and artifact generation with high confidence |
+| `good` | Works in most cases, occasional timing issues |
+| `fair` | Requires specific conditions or multiple attempts |
+| `unreliable` | Proof-of-concept only, high failure rate |
+
+---
+
+## Working with QEMU
+
+For modules that need live emulation to validate exploitability, use `QEMUInstance`:
+
+```python
+from rtosploit.config import RTOSploitConfig
+from rtosploit.emulation.qemu import QEMUInstance
+
+def exploit(self, target: ScanTarget) -> ScanResult:
+    firmware = self._get_option("firmware")
+    machine  = self._get_option("machine")
+
+    config = RTOSploitConfig()
+    qemu = QEMUInstance(config)
+
+    try:
+        qemu.start(
+            firmware_path=firmware,
+            machine_name=machine,
+            gdb=True,       # Enable GDB for interaction
+            paused=True,    # Start paused so GDB can attach
+        )
+
+        # Interact via GDB stub
+        from rtosploit.emulation.gdb import GDBStub
+        gdb = GDBStub(port=1234)
+        gdb.connect()
+
+        # ... send exploit payload, read registers, etc. ...
+
+        result_status = "success"
+    except Exception as e:
+        result_status = "error"
+    finally:
+        qemu.stop()
+
+    return ScanResult(
+        module=self.name,
+        status=result_status,
+        target_rtos=self.rtos,
+        architecture=self.architecture,
+        technique="gdb_assisted_exploitation",
+    )
+```
+
+---
+
+## Payload Helpers
+
+RTOSploit includes payload generation utilities:
+
+```python
+from rtosploit.payloads.shellcode import ShellcodeGenerator
+from rtosploit.payloads.rop import ROPHelper
+
+# Generate shellcode
+gen = ShellcodeGenerator(arch="armv7m")
+payload = gen.generate("mpu_disable", format="raw")
+
+# Build ROP chain
+rop = ROPHelper(binary_path=firmware, arch="armv7m")
+chain = rop.build_mpu_disable()
+chain_bytes = rop.to_bytes(chain)
+```
+
+---
+
+## Testing Your Module
+
+Use pytest to test your module in isolation:
+
+```python
+# tests/unit/test_my_scanner.py
+
+from unittest.mock import MagicMock, patch
+import pytest
+from rtosploit.scanners.freertos.my_scanner import MyScanner
+from rtosploit.scanners.base import ScanResult
+
+
+class TestMyScanner:
+    def test_name_is_set(self):
+        m = MyScanner()
+        assert m.name == "My Scanner Name"
+
+    def test_rtos_is_freertos(self):
+        m = MyScanner()
+        assert m.rtos == "freertos"
+
+    def test_check_returns_bool(self):
+        m = MyScanner()
+        with patch("rtosploit.utils.binary.load_firmware") as mock_load, \
+             patch("rtosploit.analysis.fingerprint.fingerprint_firmware") as mock_fp:
+            mock_fp.return_value = MagicMock(rtos_type="freertos", version="10.4.3")
+            result = m.check(MagicMock())
+        assert isinstance(result, bool)
+
+    def test_exploit_returns_result(self):
+        m = MyScanner()
+        m._get_option = lambda k: {"firmware": "/tmp/fw.bin", "machine": "mps2-an385"}.get(k)
+        with patch.object(m, "_do_exploitation", return_value=True):
+            result = m.exploit(MagicMock())
+        assert isinstance(result, ScanResult)
+        assert result.status == "success"
+
+    def test_requirements_returns_list(self):
+        m = MyScanner()
+        assert isinstance(m.requirements(), list)
+
+    def test_cleanup_does_not_raise(self):
+        m = MyScanner()
+        m.cleanup()  # Must not raise
+```
+
+Run:
+
+```bash
+.venv/bin/python -m pytest tests/unit/test_my_scanner.py -v
+```
+
+---
+
+## Auto-Discovery
+
+The `ScannerRegistry` scans `rtosploit/scanners/` recursively for any Python class that:
+1. Is a concrete subclass of `ScannerModule` (not abstract)
+2. Has a non-empty `name` attribute
+
+No manual registration is needed. The module is available in the console as `<rtos>/<filename_stem>` immediately after adding the file.
+
+Verify discovery:
+
+```bash
+rtosploit scan-vuln list
+# or in the console:
+rtosploit console
+rtosploit> search my_scanner_name
+```

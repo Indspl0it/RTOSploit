@@ -30,8 +30,8 @@ class TestDocs:
     def test_docs_quickstart_exists(self):
         assert Path("docs/quickstart.md").exists()
 
-    def test_docs_writing_exploits_exists(self):
-        assert Path("docs/writing-exploits.md").exists()
+    def test_docs_writing_scanners_exists(self):
+        assert Path("docs/writing-scanners.md").exists()
 
     def test_docs_architecture_exists(self):
         assert Path("docs/architecture.md").exists()

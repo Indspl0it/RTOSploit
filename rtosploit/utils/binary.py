@@ -281,10 +281,19 @@ def load_elf(path: Path) -> FirmwareImage:
         base_address = 0
 
     # Build flat data blob from sections ordered by address
+    # Cap at 16MB to avoid multi-hundred-MB allocations when flash (0x0)
+    # and SRAM (0x20000000) sections span a 512MB address gap
+    _MAX_FLAT_SIZE = 16 * 1024 * 1024  # 16MB
     if sections:
         sorted_sections = sorted(sections, key=lambda s: s.address)
         end_addr = max(s.address + s.size for s in sorted_sections)
         flat_size = end_addr - base_address
+        if flat_size > _MAX_FLAT_SIZE:
+            # Only flatten code/data sections, skip the address gap
+            code_sections = [s for s in sorted_sections if s.data and len(s.data) > 0]
+            if code_sections:
+                end_addr = max(s.address + len(s.data) for s in code_sections)
+                flat_size = min(end_addr - base_address, _MAX_FLAT_SIZE)
         flat = bytearray(flat_size)
         for sec in sorted_sections:
             off = sec.address - base_address

@@ -180,7 +180,7 @@ rtosploit --json coverage stats --firmware fw.bin --bitmap ./bitmap \
 
 - [CLI Reference](../README.md#cli-reference) — Full option documentation for every command
 - [Architecture](architecture.md) — System design, data flows, and Mermaid diagrams
-- [Writing Exploit Modules](writing-exploits.md) — Add your own exploit modules
+- [Writing Scanner Modules](writing-scanners.md) — Add your own vulnerability scanner modules
 - [CI/CD Integration](ci-integration.md) — GitHub Actions, GitLab CI, and Makefile recipes
 - [Crash Triage](crash-triage.md) — Deep dive into exploitability classification
 - [CVE Correlation](cve-correlation.md) — Database internals and NVD sync

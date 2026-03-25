@@ -21,9 +21,10 @@ from rtosploit.reporting.models import finding_from_triaged_crash
 # ---------------------------------------------------------------------------
 
 def _crash(crash_type: str = "HardFault", cfsr: int = 0, pc: int = 0x0800_0100,
-           fault_address: int = 0, registers: dict | None = None) -> dict:
+           fault_address: int = 0, registers: dict | None = None,
+           stop_reason: str = "", engine_type: str = "") -> dict:
     """Build a minimal crash_data dict for classifier tests."""
-    return {
+    d = {
         "crash_type": crash_type,
         "cfsr": cfsr,
         "pc": pc,
@@ -32,6 +33,11 @@ def _crash(crash_type: str = "HardFault", cfsr: int = 0, pc: int = 0x0800_0100,
         "stack_trace": [],
         "pre_crash_events": [],
     }
+    if stop_reason:
+        d["stop_reason"] = stop_reason
+    if engine_type:
+        d["engine_type"] = engine_type
+    return d
 
 
 # ---------------------------------------------------------------------------
@@ -63,11 +69,11 @@ class TestTriageResult:
 
 
 # ---------------------------------------------------------------------------
-# ExploitabilityClassifier
+# ExploitabilityClassifier - CFSR-based (QEMU path)
 # ---------------------------------------------------------------------------
 
-class TestClassifier:
-    """Test MSEC-style classification rules for Cortex-M crashes."""
+class TestClassifierCFSR:
+    """Test MSEC-style classification rules for Cortex-M crashes with CFSR."""
 
     def setup_method(self):
         self.clf = ExploitabilityClassifier()
@@ -128,6 +134,88 @@ class TestClassifier:
             _crash(cfsr=1 << 1, registers={"sp": 0x0000_0004})
         )
         assert result.sp_control is True
+
+
+# ---------------------------------------------------------------------------
+# ExploitabilityClassifier - StopReason-based (Unicorn/PIP path)
+# ---------------------------------------------------------------------------
+
+class TestClassifierStopReason:
+    """Test classification using StopReason from PIP/Unicorn engine (no CFSR)."""
+
+    def setup_method(self):
+        self.clf = ExploitabilityClassifier()
+
+    def test_stack_overflow_exploitable(self):
+        result = self.clf.classify(
+            _crash(stop_reason="stack_overflow", engine_type="unicorn")
+        )
+        assert result.exploitability == Exploitability.EXPLOITABLE
+        assert any("stack overflow" in r.lower() for r in result.reasons)
+
+    def test_permission_error_probably_exploitable(self):
+        result = self.clf.classify(
+            _crash(
+                stop_reason="permission_error",
+                fault_address=0x0800_0000,
+                engine_type="unicorn",
+            )
+        )
+        assert result.exploitability == Exploitability.PROBABLY_EXPLOITABLE
+        assert any("permission" in r.lower() for r in result.reasons)
+
+    def test_unmapped_access_wild_pointer(self):
+        result = self.clf.classify(
+            _crash(
+                stop_reason="unmapped_access",
+                fault_address=0xDEAD_0000,
+                engine_type="unicorn",
+            )
+        )
+        assert result.exploitability == Exploitability.PROBABLY_EXPLOITABLE
+        assert result.write_target == 0xDEAD_0000
+
+    def test_unmapped_access_null_deref(self):
+        result = self.clf.classify(
+            _crash(
+                stop_reason="unmapped_access",
+                fault_address=0x0000_0000,
+                engine_type="unicorn",
+            )
+        )
+        assert result.exploitability == Exploitability.PROBABLY_NOT
+        assert any("null" in r.lower() for r in result.reasons)
+
+    def test_unmapped_access_pc_control(self):
+        result = self.clf.classify(
+            _crash(
+                stop_reason="unmapped_access",
+                pc=0xDEAD_BEEF,
+                fault_address=0xCAFE_0000,
+                engine_type="unicorn",
+            )
+        )
+        assert result.exploitability == Exploitability.EXPLOITABLE
+        assert result.pc_control is True
+
+    def test_input_exhausted_clean(self):
+        result = self.clf.classify(
+            _crash(stop_reason="input_exhausted", engine_type="unicorn")
+        )
+        assert result.exploitability == Exploitability.PROBABLY_NOT
+        assert any("clean" in r.lower() for r in result.reasons)
+
+    def test_timeout_clean(self):
+        result = self.clf.classify(
+            _crash(stop_reason="timeout", engine_type="unicorn")
+        )
+        assert result.exploitability == Exploitability.PROBABLY_NOT
+
+    def test_infinite_loop_clean(self):
+        result = self.clf.classify(
+            _crash(stop_reason="infinite_loop", engine_type="unicorn")
+        )
+        assert result.exploitability == Exploitability.PROBABLY_NOT
 
 
 # ---------------------------------------------------------------------------
@@ -276,6 +364,40 @@ class TestFindingFromTriagedCrash:
         )
         finding = finding_from_triaged_crash(tc)
         assert finding.severity == "low"
+
+    def test_unicorn_crash_with_new_fields(self):
+        """Triaged crash from Unicorn engine propagates new fields."""
+        tr = TriageResult(
+            exploitability=Exploitability.PROBABLY_EXPLOITABLE,
+            reasons=["Unmapped memory access at 0xdead0000"],
+            fault_type="unmapped_access",
+        )
+        tc = TriagedCrash(
+            crash_id="uc-crash-001",
+            original_input="/tmp/input.bin",
+            minimized_input=None,
+            triage_result=tr,
+            original_size=64,
+            minimized_size=None,
+            crash_data={
+                "fault_type": "unmapped_access",
+                "pc": 0x0800_1000,
+                "fault_address": 0xDEAD_0000,
+                "registers": {},
+                "stop_reason": "unmapped_access",
+                "engine_type": "unicorn",
+                "blocks_executed": 500,
+                "pip_stats": {"total_reads": 10, "replay_count": 5},
+            },
+        )
+        finding = finding_from_triaged_crash(tc)
+        assert finding.stop_reason == "unmapped_access"
+        assert finding.engine_type == "unicorn"
+        assert finding.blocks_executed == 500
+        assert finding.pip_stats is not None
+        assert finding.pip_stats["total_reads"] == 10
+        assert "Stop reason: unmapped_access" in finding.description
+        assert "Engine: unicorn" in finding.description
 
 
 # ---------------------------------------------------------------------------

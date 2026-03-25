@@ -341,9 +341,9 @@ class TestExploitExecution:
         values, and verify that check() either returns a bool or raises
         a controlled error (not an unhandled crash).
         """
-        from rtosploit.exploits.registry import ExploitRegistry
+        from rtosploit.scanners.registry import ScannerRegistry
 
-        registry = ExploitRegistry()
+        registry = ScannerRegistry()
         registry.discover()
 
         # Pick the first available module
@@ -367,9 +367,9 @@ class TestExploitExecution:
 
     def test_exploit_module_lifecycle(self, firmware_path: str) -> None:
         """Test full exploit module lifecycle: configure -> check -> run."""
-        from rtosploit.exploits.registry import ExploitRegistry
+        from rtosploit.scanners.registry import ScannerRegistry
 
-        registry = ExploitRegistry()
+        registry = ScannerRegistry()
         registry.discover()
 
         if not registry._modules:

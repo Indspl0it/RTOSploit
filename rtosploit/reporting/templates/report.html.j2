@@ -17,6 +17,7 @@
     --medium: #ffc048;
     --low: #5b9cf6;
     --info: #888;
+    --accent: #4ecdc4;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -27,6 +28,7 @@
     line-height: 1.6;
   }
   h1 { color: #fff; margin-bottom: 0.5rem; }
+  h2 { color: #fff; margin: 2rem 0 1rem 0; font-size: 1.3rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
   .subtitle { color: var(--text-dim); margin-bottom: 2rem; font-size: 0.95rem; }
   .summary-grid {
     display: grid;
@@ -56,6 +58,7 @@
   .count-low { color: var(--low); }
   .count-info { color: var(--info); }
   .count-total { color: #fff; }
+  .count-accent { color: var(--accent); }
   table {
     width: 100%;
     border-collapse: collapse;
@@ -108,6 +111,16 @@
     word-break: break-all;
   }
   .detail-section.open { display: block; }
+  .info-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .info-panel dl { display: grid; grid-template-columns: auto 1fr; gap: 0.3rem 1.5rem; }
+  .info-panel dt { color: var(--text-dim); font-weight: 600; }
+  .info-panel dd { margin: 0; }
   .metadata {
     background: var(--bg-card);
     border: 1px solid var(--border);
@@ -119,6 +132,21 @@
   .metadata dt { color: var(--text-dim); display: inline; }
   .metadata dt::after { content: ': '; }
   .metadata dd { display: inline; margin-right: 2rem; }
+  .periph-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+  }
+  .periph-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+  }
+  .periph-card .name { font-weight: 600; color: var(--accent); }
+  .periph-card .type { color: var(--text-dim); font-size: 0.85rem; }
+  .periph-card .conf { font-size: 0.85rem; }
   footer {
     margin-top: 3rem;
     padding-top: 1rem;
@@ -134,13 +162,16 @@
 <h1>RTOSploit Engagement Report</h1>
 <p class="subtitle">Engagement ID: {{ report.engagement_id }}</p>
 
+{# ---- Target Info ---- #}
 <dl class="metadata">
   <dt>Firmware</dt><dd>{{ report.target_firmware }}</dd>
   {% if report.target_rtos %}<dt>RTOS</dt><dd>{{ report.target_rtos }}</dd>{% endif %}
   {% if report.target_version %}<dt>Version</dt><dd>{{ report.target_version }}</dd>{% endif %}
   <dt>Architecture</dt><dd>{{ report.target_architecture }}</dd>
+  {% if report.metadata.get('mcu_family') %}<dt>MCU Family</dt><dd>{{ report.metadata['mcu_family'] }}</dd>{% endif %}
 </dl>
 
+{# ---- Severity Summary Cards ---- #}
 <div class="summary-grid">
   <div class="summary-card">
     <div class="count count-total">{{ total_findings }}</div>
@@ -168,7 +199,75 @@
   </div>
 </div>
 
+{# ---- Category Breakdown ---- #}
+{% if category_counts %}
+<div class="summary-grid">
+  {% for cat, count in category_counts.items() %}
+  <div class="summary-card">
+    <div class="count count-accent">{{ count }}</div>
+    <div class="label">{{ cat }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{# ---- Fuzzing Campaign Stats ---- #}
+{% if report.fuzz_stats %}
+<h2>Fuzzing Campaign</h2>
+<div class="info-panel">
+  <dl>
+    <dt>Engine</dt><dd>{{ report.fuzz_stats.engine_type }}</dd>
+    <dt>Executions</dt><dd>{{ report.fuzz_stats.executions }}</dd>
+    <dt>Exec/sec</dt><dd>{{ "%.1f"|format(report.fuzz_stats.exec_per_sec) }}</dd>
+    <dt>Crashes</dt><dd>{{ report.fuzz_stats.crashes }} ({{ report.fuzz_stats.unique_crashes }} unique)</dd>
+    <dt>Corpus Size</dt><dd>{{ report.fuzz_stats.corpus_size }}</dd>
+    <dt>Duration</dt><dd>{{ "%.1f"|format(report.fuzz_stats.elapsed_seconds) }}s</dd>
+  </dl>
+</div>
+{% endif %}
+
+{# ---- Coverage Stats ---- #}
+{% if report.coverage_stats %}
+<h2>Coverage</h2>
+<div class="info-panel">
+  <dl>
+    <dt>Type</dt><dd>{{ report.coverage_stats.coverage_type }}</dd>
+    <dt>Edges Hit</dt><dd>{{ report.coverage_stats.edge_count }}</dd>
+    <dt>Total Hits</dt><dd>{{ report.coverage_stats.total_hits }}</dd>
+    <dt>Bitmap Size</dt><dd>{{ report.coverage_stats.bitmap_size }}</dd>
+    {% if report.coverage_stats.coverage_pct > 0 %}
+    <dt>Coverage</dt><dd>{{ "%.2f"|format(report.coverage_stats.coverage_pct) }}%</dd>
+    {% endif %}
+  </dl>
+</div>
+{% endif %}
+
+{# ---- Peripheral Detection ---- #}
+{% if report.peripheral_summary %}
+<h2>Peripheral Detection</h2>
+<div class="info-panel">
+  <dl>
+    <dt>MCU Family</dt><dd>{{ report.peripheral_summary.mcu_family }}</dd>
+    <dt>Peripherals Detected</dt><dd>{{ report.peripheral_summary.total_detected }}</dd>
+    <dt>Detection Layers</dt><dd>{{ report.peripheral_summary.layers_run | join(', ') }}</dd>
+  </dl>
+</div>
+{% if report.peripheral_summary.peripherals %}
+<div class="periph-grid">
+  {% for p in report.peripheral_summary.peripherals %}
+  <div class="periph-card">
+    <div class="name">{{ p.name }}</div>
+    <div class="type">{{ p.get('type', '') }}{% if p.get('base_address') %} @ {{ p.base_address }}{% endif %}</div>
+    <div class="conf">Confidence: {{ p.get('confidence_level', 'unknown') }} ({{ "%.2f"|format(p.get('confidence', 0)) }})</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endif %}
+
+{# ---- Findings Table ---- #}
 {% if report.findings %}
+<h2>Findings</h2>
 <table id="findings-table">
   <thead>
     <tr>
@@ -190,6 +289,12 @@
         <span class="detail-toggle" onclick="toggleDetail('detail-{{ loop.index }}')">show</span>
         <div class="detail-section" id="detail-{{ loop.index }}">
 {{ finding.description }}
+{% if finding.stop_reason %}
+Stop Reason: {{ finding.stop_reason }}{% endif %}
+{% if finding.engine_type %}
+Engine: {{ finding.engine_type }}{% endif %}
+{% if finding.blocks_executed %}
+Blocks Executed: {{ finding.blocks_executed }}{% endif %}
 {% if finding.registers %}
 Registers:
 {% for reg, val in finding.registers.items() %}  {{ reg }}: 0x{{ '%08x' % val }}
@@ -198,8 +303,13 @@ Registers:
 Stack Trace:
 {% for addr in finding.stack_trace %}  0x{{ '%08x' % addr }}
 {% endfor %}{% endif %}
+{% if finding.pip_stats %}
+PIP Stats:
+{% for k, v in finding.pip_stats.items() %}  {{ k }}: {{ v }}
+{% endfor %}{% endif %}
 {% if finding.cve %}CVE: {{ finding.cve }}{% endif %}
 {% if finding.exploit_module %}Module: {{ finding.exploit_module }}{% endif %}
+{% if finding.exploitability %}Exploitability: {{ finding.exploitability }}{% endif %}
 {% if finding.reproducer_path %}Reproducer: {{ finding.reproducer_path }}{% endif %}
         </div>
       </td>

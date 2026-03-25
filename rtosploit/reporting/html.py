@@ -32,14 +32,18 @@ class HTMLGenerator:
             "low": 0,
             "info": 0,
         }
+        category_counts: dict[str, int] = {}
         for f in report.findings:
             sev = f.severity.lower()
             if sev in severity_counts:
                 severity_counts[sev] += 1
+            cat = f.category
+            category_counts[cat] = category_counts.get(cat, 0) + 1
 
         return template.render(
             report=report,
             severity_counts=severity_counts,
+            category_counts=category_counts,
             total_findings=len(report.findings),
         )
 

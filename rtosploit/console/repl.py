@@ -66,7 +66,7 @@ STATUS_WARNING = "[bold yellow][!][/bold yellow]"
 
 
 def _inst_attr(inst: object, *names: str, default: str = "") -> str:
-    """Return first matching attribute value from an exploit module instance."""
+    """Return first matching attribute value from a scanner module instance."""
     for name in names:
         val = getattr(inst, name, None)
         if val is not None:
@@ -95,8 +95,8 @@ class RTOSploitConsole:
 
     def _get_registry(self):
         if self._registry is None:
-            from rtosploit.exploits.registry import ExploitRegistry
-            self._registry = ExploitRegistry()
+            from rtosploit.scanners.registry import ScannerRegistry
+            self._registry = ScannerRegistry()
             self._registry.discover()
         return self._registry
 
@@ -116,7 +116,7 @@ class RTOSploitConsole:
         self._print(STATUS_WARNING, msg)
 
     def cmd_use(self, args: str) -> None:
-        """use MODULE — load an exploit module."""
+        """use MODULE — load a scanner module."""
         if not args:
             self.failure("Usage: use <module_path>  (e.g. use freertos/heap_overflow)")
             return
@@ -181,10 +181,10 @@ class RTOSploitConsole:
             self.info(f"Reliability: [yellow]{_inst_attr(inst, 'reliability')}[/yellow]")
             self.info(f"Category: [yellow]{_inst_attr(inst, 'category')}[/yellow]")
 
-        elif sub in ("modules", "exploits", ""):
+        elif sub in ("modules", "scanners", ""):
             registry = self._get_registry()
             table = Table(
-                title="Available Exploit Modules",
+                title="Available Vulnerability Scanners",
                 show_header=True,
                 header_style="bold cyan",
             )
@@ -206,7 +206,7 @@ class RTOSploitConsole:
 
         else:
             self.failure(f"Unknown show target: [dim]{sub}[/dim]")
-            self.info("Available: [dim]show options[/dim], [dim]show info[/dim], [dim]show modules[/dim]")
+            self.info("Available: [dim]show options[/dim], [dim]show info[/dim], [dim]show modules[/dim], [dim]show scanners[/dim]")
 
     def cmd_set(self, args: str) -> None:
         """set KEY VALUE — set a module option."""
@@ -279,8 +279,8 @@ class RTOSploitConsole:
                 memory_mb=16,
                 architecture="arm",
             )
-            from rtosploit.exploits.target import ExploitTarget
-            target = ExploitTarget(firmware_path=firmware, machine_config=machine_config)
+            from rtosploit.scanners.target import ScanTarget
+            target = ScanTarget(firmware_path=firmware, machine_config=machine_config)
             inst = self.state.current_module_instance
             result = inst.check(target)
             if result:
@@ -291,7 +291,7 @@ class RTOSploitConsole:
             self.failure(f"Check error: {e}")
 
     def cmd_exploit(self, args: str) -> None:
-        """exploit / run — execute current module."""
+        """exploit / run — execute current scanner module."""
         if not self.state.current_module_instance:
             self.failure("No module selected. Use [dim]use <module>[/dim] first.")
             return
@@ -304,8 +304,8 @@ class RTOSploitConsole:
         self.info(f"Executing: [cyan]{self.state.current_module}[/cyan]")
 
         try:
-            from rtosploit.exploits.runner import run_exploit
-            result = run_exploit(self.state.current_module, dict(self.state.option_values))
+            from rtosploit.scanners.runner import run_scan
+            result = run_scan(self.state.current_module, dict(self.state.option_values))
             self.state.last_result = result
 
             if result.status == "success":
@@ -384,14 +384,14 @@ class RTOSploitConsole:
         help_text.add_column("Description", style="white")
 
         commands = [
-            ("use <module>",       "Load an exploit module (e.g. use freertos/heap_overflow)"),
+            ("use <module>",       "Load a scanner module (e.g. use freertos/heap_overflow)"),
             ("show options",       "Display current module options and values"),
             ("show info",          "Display current module information and description"),
-            ("show modules",       "List all available exploit modules"),
+            ("show modules",       "List all available vulnerability scanners"),
             ("set <key> <value>",  "Set a module option value"),
             ("unset <key>",        "Clear a module option"),
             ("check",              "Run non-destructive vulnerability check"),
-            ("exploit / run",      "Execute current module's exploit"),
+            ("exploit / run",      "Execute current module's vulnerability scan"),
             ("back",               "Deselect current module"),
             ("search <term>",      "Search modules by name, CVE, RTOS, or category"),
             ("banner",             "Display the RTOSploit banner"),
@@ -508,7 +508,7 @@ class RTOSploitConsole:
                     # "show <partial>" -> complete show sub-commands
                     elif text_lower.startswith("show "):
                         partial = text[5:]
-                        for sub in ("options", "info", "modules", "exploits"):
+                        for sub in ("options", "info", "modules", "scanners"):
                             if sub.startswith(partial.lower()):
                                 yield Completion(sub, start_position=-len(partial))
 

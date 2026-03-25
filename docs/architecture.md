@@ -18,7 +18,7 @@ flowchart TB
         analysis["Static Analysis\nfingerprint · heap · MPU · strings"]
         emulation["Emulation Layer\nQEMU orchestration · GDB · QMP"]
         fuzzer["Fuzzing Engine\nAFL bitmap · crash dedup · corpus"]
-        exploits["Exploit Modules\nFreeRTOS · ThreadX · Zephyr"]
+        scanners["Vulnerability Scanners\nFreeRTOS · ThreadX · Zephyr"]
         cve["CVE Intelligence\ndatabase · correlator · NVD sync"]
     end
 
@@ -222,13 +222,13 @@ flowchart LR
 
 ---
 
-## Exploit Module Architecture
+## Vulnerability Scanner Architecture
 
-All exploit modules follow the `ExploitModule` abstract base class. The registry discovers them at runtime via Python's `importlib`.
+All scanner modules follow the `ScannerModule` abstract base class. The registry discovers them at runtime via Python's `importlib`.
 
 ```mermaid
 classDiagram
-    class ExploitModule {
+    class ScannerModule {
         <<abstract>>
         +name: str
         +description: str
@@ -236,16 +236,16 @@ classDiagram
         +category: str
         +reliability: str
         +cve: str | None
-        +options: dict[str, ExploitOption]
+        +options: dict[str, ScanOption]
         +register_options() void
-        +check(target: ExploitTarget) bool*
-        +exploit(target: ExploitTarget) ExploitResult*
+        +check(target: ScanTarget) bool*
+        +exploit(target: ScanTarget) ScanResult*
         +requirements() list[str]*
         +cleanup() void*
         +add_option(name, type, required, default, description) void
     }
 
-    class ExploitOption {
+    class ScanOption {
         +name: str
         +type: str
         +required: bool
@@ -254,7 +254,7 @@ classDiagram
         +current_value: Any
     }
 
-    class ExploitResult {
+    class ScanResult {
         +module: str
         +status: str
         +target_rtos: str
@@ -266,25 +266,25 @@ classDiagram
         +cve: str | None
     }
 
-    class ExploitRegistry {
+    class ScannerRegistry {
         +_modules: dict[str, type]
         +discover() void
         +get(path: str) type | None
         +search(term: str) list
     }
 
-    ExploitModule "1" --> "*" ExploitOption : options
-    ExploitModule --> ExploitResult : returns
-    ExploitRegistry "1" --> "*" ExploitModule : manages
+    ScannerModule "1" --> "*" ScanOption : options
+    ScannerModule --> ScanResult : returns
+    ScannerRegistry "1" --> "*" ScannerModule : manages
 ```
 
 ### Module Discovery Flow
 
 ```mermaid
 flowchart LR
-    registry["ExploitRegistry.discover()"] --> scan["Scan rtosploit/exploits/\nfreertos/ threadx/ zephyr/"]
+    registry["ScannerRegistry.discover()"] --> scan["Scan rtosploit/scanners/\nfreertos/ threadx/ zephyr/"]
     scan --> importlib["importlib.import_module()\nfor each .py file"]
-    importlib --> inspect["Inspect for ExploitModule\nsubclasses"]
+    importlib --> inspect["Inspect for ScannerModule\nsubclasses"]
     inspect --> register["registry._modules[path] = cls"]
     register --> ready["Modules available\nfor use/search/run"]
 ```

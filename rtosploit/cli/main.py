@@ -67,7 +67,7 @@ def cli(
 # Register all subcommands
 from rtosploit.cli.commands.emulate import emulate  # noqa: E402
 from rtosploit.cli.commands.fuzz import fuzz  # noqa: E402
-from rtosploit.cli.commands.exploit import exploit  # noqa: E402
+from rtosploit.cli.commands.scan_vuln import scan_vuln  # noqa: E402
 from rtosploit.cli.commands.payload import payload  # noqa: E402
 from rtosploit.cli.commands.analyze import analyze  # noqa: E402
 from rtosploit.cli.commands.svd import svd  # noqa: E402
@@ -82,7 +82,7 @@ from rtosploit.cli.commands.rehost import rehost  # noqa: E402
 
 cli.add_command(emulate)
 cli.add_command(fuzz)
-cli.add_command(exploit)
+cli.add_command(scan_vuln)
 cli.add_command(payload)
 cli.add_command(analyze)
 cli.add_command(svd)

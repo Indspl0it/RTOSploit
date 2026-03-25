@@ -39,15 +39,15 @@ cargo test --workspace
 - Rust: use `cargo fmt` and `cargo clippy`
 - Keep imports sorted (stdlib, third-party, local)
 
-## Adding Exploit Modules
+## Adding Vulnerability Scanner Modules
 
-1. Create `rtosploit/exploits/<rtos>/mymodule.py`
-2. Extend `ExploitModule` ABC — implement `check()`, `exploit()`, `cleanup()`, `requirements()`
-3. Add tests to `tests/unit/test_<rtos>_exploits.py`
+1. Create `rtosploit/scanners/<rtos>/mymodule.py`
+2. Extend `ScannerModule` ABC — implement `check()`, `exploit()`, `cleanup()`, `requirements()`
+3. Add tests to `tests/unit/test_<rtos>_scanners.py`
 4. If the module has a CVE, add it to `rtosploit/cve/bundled_cves.json`
 5. Submit PR
 
-See [Writing Exploits](docs/writing-exploits.md) for the full API reference.
+See [Writing Scanners](docs/writing-scanners.md) for the full API reference.
 
 ## Adding VulnRange Labs
 
@@ -75,7 +75,7 @@ Edit `rtosploit/cve/bundled_cves.json` and add entries following the existing fo
 }
 ```
 
-Set `has_exploit: true` if there's a corresponding exploit module in `rtosploit/exploits/`.
+Set `has_exploit: true` if there's a corresponding scanner module in `rtosploit/scanners/`.
 
 ## Project Structure
 

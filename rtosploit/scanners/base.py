@@ -1,0 +1,187 @@
+"""Abstract base classes for RTOSploit vulnerability scanner modules."""
+
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from typing import Any, Optional
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ScanOption:
+    name: str
+    type: str  # "str" | "int" | "bool" | "path"
+    required: bool
+    default: Any
+    description: str
+    current_value: Any = None
+
+    def set(self, value: Any) -> None:
+        """Set and validate value."""
+        if self.type == "int":
+            self.current_value = int(value)
+        elif self.type == "bool":
+            if isinstance(value, str):
+                self.current_value = value.lower() in ("true", "yes", "1")
+            else:
+                self.current_value = bool(value)
+        elif self.type == "path":
+            from pathlib import Path
+            self.current_value = Path(value)
+        else:
+            self.current_value = str(value)
+
+    @property
+    def value(self) -> Any:
+        """Return current value, falling back to default."""
+        return self.current_value if self.current_value is not None else self.default
+
+
+@dataclass
+class ScanResult:
+    module: str
+    status: str  # "success" | "failure" | "error" | "not_vulnerable"
+    target_rtos: str
+    architecture: str
+    technique: str
+    payload_delivered: bool = False
+    payload_type: Optional[str] = None
+    achieved: list[str] = field(default_factory=list)
+    registers_at_payload: dict[str, int] = field(default_factory=dict)
+    notes: list[str] = field(default_factory=list)
+    cve: Optional[str] = None
+
+    def to_dict(self) -> dict:
+        return {
+            "module": self.module,
+            "status": self.status,
+            "target_rtos": self.target_rtos,
+            "architecture": self.architecture,
+            "technique": self.technique,
+            "payload_delivered": self.payload_delivered,
+            "payload_type": self.payload_type,
+            "achieved": self.achieved,
+            "registers_at_payload": self.registers_at_payload,
+            "notes": self.notes,
+            "cve": self.cve,
+        }
+
+
+class ScannerModule(ABC):
+    """Abstract base class for all RTOSploit vulnerability scanner modules.
+
+    Scanner modules perform static vulnerability assessment and generate exploit
+    artifacts (payloads, ROP chains, crafted packets). They do not execute
+    payloads against live firmware unless a QEMU target is explicitly provided.
+
+    Subclasses must define the class-level attributes and implement
+    the abstract methods: check(), exploit(), cleanup(), requirements().
+    """
+
+    # Subclasses must define these class attributes
+    name: str = ""
+    description: str = ""
+    authors: list[str] = []
+    references: list[str] = []
+    rtos: str = ""          # "freertos" | "threadx" | "zephyr" | "rtems"
+    rtos_versions: list[str] = []  # ["*"] for all, or specific like ["10.x", "11.x"]
+    architecture: str = ""  # "armv7m" | "armv8m" | "riscv32" | "*"
+    category: str = ""      # "heap_corruption" | "stack_overflow" | "tcb_overwrite" | "mpu_bypass"
+    reliability: str = ""   # "excellent" | "good" | "fair" | "unreliable"
+    cve: Optional[str] = None
+
+    def __init__(self):
+        self._options: dict[str, ScanOption] = {}
+        # Register common options present on all modules
+        self._register_common_options()
+        self.register_options()
+
+    def _register_common_options(self):
+        self._options["firmware"] = ScanOption(
+            name="firmware", type="path", required=True, default=None,
+            description="Path to target firmware binary"
+        )
+        self._options["machine"] = ScanOption(
+            name="machine", type="str", required=True, default="mps2-an385",
+            description="QEMU machine type to emulate"
+        )
+        self._options["payload"] = ScanOption(
+            name="payload", type="str", required=False, default=None,
+            description="Payload name or path (from payload generator)"
+        )
+
+    def register_options(self):
+        """Override to register module-specific options."""
+        pass
+
+    def add_option(self, option: ScanOption):
+        self._options[option.name] = option
+
+    def set_option(self, name: str, value: Any) -> None:
+        if name not in self._options:
+            raise ValueError(f"Unknown option: {name}")
+        self._options[name].set(value)
+
+    def get_option(self, name: str) -> Any:
+        if name not in self._options:
+            raise ValueError(f"Unknown option: {name}")
+        return self._options[name].value
+
+    @property
+    def options(self) -> dict[str, ScanOption]:
+        return self._options
+
+    def validate(self) -> None:
+        """Raise ValueError if required options are not set."""
+        from pathlib import Path
+        for name, opt in self._options.items():
+            if opt.required and opt.value is None:
+                raise ValueError(f"Required option not set: {name}")
+        firmware_path = self.get_option("firmware")
+        if firmware_path and not Path(firmware_path).exists():
+            raise ValueError(f"Firmware file not found: {firmware_path}")
+
+    @abstractmethod
+    def check(self, target: "ScanTarget") -> bool:
+        """Assess whether the target firmware is vulnerable via static analysis."""
+        ...
+
+    @abstractmethod
+    def exploit(self, target: "ScanTarget", payload: Optional[bytes]) -> ScanResult:
+        """Generate exploit artifacts (payload, addresses, chain) for the target. Returns ScanResult."""
+        ...
+
+    @abstractmethod
+    def cleanup(self, target: "ScanTarget") -> None:
+        """Release any resources acquired during check() or exploit()."""
+        ...
+
+    @abstractmethod
+    def requirements(self) -> dict:
+        """Return dict of required capabilities: {"qemu": bool, "gdb": bool, "network": bool}"""
+        ...
+
+    def info(self) -> dict:
+        """Return module metadata as dict."""
+        return {
+            "name": self.name,
+            "description": self.description,
+            "authors": self.authors,
+            "references": self.references,
+            "rtos": self.rtos,
+            "rtos_versions": self.rtos_versions,
+            "architecture": self.architecture,
+            "category": self.category,
+            "reliability": self.reliability,
+            "cve": self.cve,
+        }
+
+
+# Avoid circular import — ScanTarget is imported at runtime in method signatures
+# The string annotation "ScanTarget" is resolved at runtime via TYPE_CHECKING
+from typing import TYPE_CHECKING  # noqa: E402
+if TYPE_CHECKING:
+    from rtosploit.scanners.target import ScanTarget
