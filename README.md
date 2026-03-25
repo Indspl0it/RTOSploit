@@ -17,7 +17,7 @@
 
 ---
 
-RTOSploit is a security testing framework purpose-built for embedded RTOS firmware. It combines static analysis, CVE correlation, vulnerability assessment, exploit and payload generation, peripheral firmware auto-rehosting, grey-box fuzzing, and automated reporting — all running entirely in software via QEMU emulation. No physical hardware required.
+RTOSploit is a security testing framework purpose-built for embedded RTOS firmware. Static analysis, CVE correlation, exploit assessment, and payload generation work on **any RTOS firmware** — ELF or raw binary, with or without symbols. The emulation and fuzzing pipeline works when firmware targets a QEMU-supported machine or when proper peripheral configs are provided. Auto-rehosting for arbitrary hardware firmware is an active research area.
 
 | | |
 |---|---|
@@ -27,6 +27,20 @@ RTOSploit is a security testing framework purpose-built for embedded RTOS firmwa
 | **Exploit Modules** | 15 modules across FreeRTOS, ThreadX, and Zephyr |
 | **Tests** | 1370+ unit tests |
 | **License** | GPL-3.0-only |
+
+### What works on what
+
+| Capability | Real product firmware (.bin) | QEMU-targeted firmware (.elf) |
+|---|---|---|
+| RTOS fingerprint | Works (string patterns) | Works (symbols + strings) |
+| CVE correlation | Works (with `--rtos` hint) | Works (auto-detected) |
+| Peripheral detection | Works (6-layer engine) | Works (all layers) |
+| Payload/ROP generation | Works | Works |
+| Exploit assessment | Works (static check) | Works |
+| Emulate + boot | Requires matching QEMU machine or peripheral config | Works |
+| Grey-box fuzzing | Requires matching QEMU machine or peripheral config | Works |
+
+> **Note:** Real product firmware (e.g., nRF52840, STM32F407 builds) is built for specific silicon with specific peripheral addresses. QEMU doesn't emulate most MCUs natively. When the firmware's target MCU matches a QEMU machine (STM32, LM3S, MPS2), emulation and fuzzing work out of the box. For other MCUs, peripheral rehosting via HAL hooks and SVD models bridges the gap — but full automatic rehosting of arbitrary hardware firmware remains an open research problem (shared by HALucinator, P2IM, Fuzzware, and similar tools).
 
 ---
 
@@ -55,16 +69,17 @@ Embedded RTOS firmware (FreeRTOS, ThreadX, Zephyr) runs on billions of devices �
 
 **What RTOSploit does (in order of a typical workflow):**
 
-1. **Static Analysis** — Fingerprints RTOS type, version, MCU family, heap allocator, MPU configuration, and peripheral usage from a firmware binary alone
-2. **CVE Correlation** — Matches detected RTOS type and version against NVD CVE data to identify known vulnerabilities
-3. **Vulnerability Assessment** — Runs 15 exploit modules that detect known vulnerability patterns (heap corruption, MPU bypass, ISR hijacking, BLE overflows)
-4. **Exploit & Payload Generation** — Generates concrete exploit artifacts: overflow buffers, ROP chains, shellcode, and malformed packets
-5. **Firmware Rehosting** — Boots firmware in QEMU with auto-detected peripheral models, HAL function intercepts, and smart MMIO fallback — zero manual configuration
-6. **Grey-Box Fuzzing** — Fuzzes the running firmware with AFL-compatible coverage tracking, crash deduplication, and multi-worker parallelism
-7. **Reporting** — Produces SARIF (for GitHub/IDE integration) and HTML reports with exploitability classification
+1. **Static Analysis** — Fingerprints RTOS type, version, MCU family, heap allocator, MPU configuration, and peripheral usage from a firmware binary alone. Works on any firmware — ELF, HEX, SREC, or raw binary.
+2. **CVE Correlation** — Matches detected RTOS type and version against a bundled NVD CVE database (59 CVEs across FreeRTOS, ThreadX, Zephyr, ESP-IDF). Works on any firmware.
+3. **Vulnerability Assessment** — Runs 15 exploit modules that detect known vulnerability patterns (heap corruption, MPU bypass, ISR hijacking, BLE overflows) via static binary analysis. Works on any firmware.
+4. **Exploit & Payload Generation** — Generates concrete exploit artifacts: overflow buffers, ROP chains, shellcode, and malformed packets. Works on any firmware.
+5. **Firmware Rehosting** — Boots firmware in QEMU with peripheral models, HAL function intercepts, and smart MMIO fallback. Works when firmware targets a QEMU-supported machine (MPS2, LM3S, STM32, etc.) or when a peripheral config is provided.
+6. **Grey-Box Fuzzing** — Fuzzes the running firmware with AFL-compatible coverage tracking, crash deduplication, and multi-worker parallelism. Requires successful emulation (step 5).
+7. **Reporting** — Produces SARIF (for GitHub/IDE integration) and HTML reports with exploitability classification. Works on any findings from steps 1-6.
 
 **What RTOSploit does NOT do:**
 
+- Automatically rehost arbitrary hardware firmware on QEMU (this is an open research problem — see HALucinator, P2IM, Fuzzware)
 - Execute exploits against live hardware (it's a software-only assessment tool)
 - Symbolic execution or concolic analysis (lightweight register tracking, not angr/Fuzzware)
 - Linux kernel or application-level fuzzing (RTOS/bare-metal only)
