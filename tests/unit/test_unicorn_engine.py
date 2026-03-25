@@ -96,7 +96,7 @@ class TestUnicornRehostEngine:
         assert engine.execution_count == 0
 
     def test_mmio_read_routes_to_handler(self) -> None:
-        """Unmapped MMIO reads are routed to the CompositeMMIOHandler."""
+        """Peripheral MMIO reads are routed to the CompositeMMIOHandler."""
         from rtosploit.peripherals.models.mmio_fallback import CompositeMMIOHandler
 
         handler = CompositeMMIOHandler()
@@ -104,17 +104,16 @@ class TestUnicornRehostEngine:
         engine = UnicornRehostEngine(fw, mmio_handler=handler)
         engine.setup()
 
-        # Directly invoke the hook to verify routing
-        # Peripheral region (0x40000000+) is unmapped on purpose
-        uc_mock = MagicMock()
-        result = engine._hook_mem_read_unmapped(
+        # Directly invoke the peripheral read hook
+        uc_mock = engine._uc  # Use the real Unicorn instance
+        engine._hook_periph_read(
             uc_mock, None, 0x40000000, 4, 0, None,
         )
-        assert result is True
         # The handler should have been called (fallback returns 1 for first read)
+        assert handler.get_coverage_stats()["total"] > 0
 
     def test_mmio_write_routes_to_handler(self) -> None:
-        """Unmapped MMIO writes are routed to the CompositeMMIOHandler."""
+        """Peripheral MMIO writes are routed to the CompositeMMIOHandler."""
         from rtosploit.peripherals.models.mmio_fallback import CompositeMMIOHandler
 
         handler = CompositeMMIOHandler()
@@ -122,11 +121,10 @@ class TestUnicornRehostEngine:
         engine = UnicornRehostEngine(fw, mmio_handler=handler)
         engine.setup()
 
-        uc_mock = MagicMock()
-        result = engine._hook_mem_write_unmapped(
-            uc_mock, None, 0x40000000, 4, 0xDEADBEEF, None,
+        engine._hook_periph_write(
+            engine._uc, None, 0x40000000, 4, 0xDEADBEEF, None,
         )
-        assert result is True
+        assert handler.get_coverage_stats()["total"] > 0
 
     def test_hal_hook_registration(self) -> None:
         """add_hal_hook stores the handler for the given address."""

@@ -225,9 +225,12 @@ def load_elf(path: Path) -> FirmwareImage:
                     base_address = addr
 
         for section in elf.iter_sections():
-            if section.header.sh_addr == 0:
-                continue
             flags = section.header.sh_flags
+            # Skip sections without ALLOC flag (debug, metadata, comments)
+            # Do NOT skip address-0 sections — Cortex-M vector table lives there
+            if not (flags & 0x2):  # SHF_ALLOC = 0x2
+                if section.header.sh_addr == 0:
+                    continue
             perms = ""
             if flags & 0x4:
                 perms += "r"

@@ -7,11 +7,19 @@ from rtosploit.fuzzing.execution import ExecutionResult, StopReason, make_result
 from rtosploit.fuzzing.fuzz_input import FuzzInputStream, InputExhausted
 from rtosploit.fuzzing.input_injector import FuzzableInput, InputInjector
 from rtosploit.fuzzing.mutator import Mutator
-from rtosploit.fuzzing.unicorn_worker import (
-    UnicornFuzzEngine,
-    UnicornFuzzStats,
-    UnicornFuzzWorker,
-)
+
+# Unicorn imports are lazy to avoid circular dependency:
+# fuzzing/__init__ -> unicorn_worker -> unicorn_engine -> fuzzing/execution -> fuzzing/__init__
+
+
+def _get_unicorn_classes():
+    from rtosploit.fuzzing.unicorn_worker import (
+        UnicornFuzzEngine,
+        UnicornFuzzStats,
+        UnicornFuzzWorker,
+    )
+    return UnicornFuzzEngine, UnicornFuzzStats, UnicornFuzzWorker
+
 
 __all__ = [
     "CorpusManager",
@@ -26,8 +34,5 @@ __all__ = [
     "InputInjector",
     "Mutator",
     "StopReason",
-    "UnicornFuzzEngine",
-    "UnicornFuzzStats",
-    "UnicornFuzzWorker",
     "make_result",
 ]

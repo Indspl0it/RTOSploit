@@ -226,14 +226,14 @@ class TestUnicornPIPIntegration:
         engine = UnicornRehostEngine(fw, mmio_handler=handler)
         engine.setup()
 
-        # Directly test the hook with a non-peripheral address
+        # Directly test the unmapped access hook with a non-peripheral address
         uc_mock = MagicMock()
-        result = engine._hook_mem_read_unmapped(
-            uc_mock, None, 0x00000004, 4, 0, None,
+        result = engine._hook_unmapped_access(
+            uc_mock, 0, 0x70000004, 4, 0, None,  # Address outside all mapped regions
         )
         assert result is False
         assert engine._stop_reason_enum == StopReason.UNMAPPED_ACCESS
-        assert engine._crash_address == 0x00000004
+        assert engine._crash_address == 0x70000004
 
     def test_peripheral_read_routes_through_pip(self) -> None:
         """Peripheral MMIO reads route through PIP when configured."""
@@ -245,12 +245,10 @@ class TestUnicornPIPIntegration:
         # Set up fuzz input with enough data for PIP
         engine.set_fuzz_input(b"\xFF" * 64)
 
-        # Directly test hook with a peripheral address
-        uc_mock = MagicMock()
-        result = engine._hook_mem_read_unmapped(
-            uc_mock, None, 0x40000100, 4, 0, None,
+        # Directly test peripheral read hook
+        engine._hook_periph_read(
+            engine._uc, None, 0x40000100, 4, 0, None,
         )
-        assert result is True
         # PIP should have been invoked (pip_handled counter incremented)
         stats = handler.get_coverage_stats()
         assert stats["pip_handled"] > 0

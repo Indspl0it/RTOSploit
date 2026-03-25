@@ -201,8 +201,14 @@ class UnicornRehostEngine:
             # Raw binary: write entire firmware data to flash base
             uc.mem_write(self._firmware.base_address, self._firmware.data)
 
-        # 4. Peripheral region (0x40000000-0x5FFFFFFF): intentionally NOT mapped
-        # MMIO accesses trigger unmapped hooks -> PIP/SVD/fallback
+        # 4. Map peripheral region (0x40000000-0x5FFFFFFF) as R+W
+        # We map it so reads don't trigger UC_HOOK_MEM_READ_UNMAPPED (which
+        # only fires once per page). Instead, we use UC_HOOK_MEM_READ on the
+        # range to intercept EVERY read for PIP/SVD routing.
+        periph_size = _PERIPH_END - _PERIPH_START
+        uc.mem_map(_PERIPH_START, periph_size, 3)  # UC_PROT_READ | UC_PROT_WRITE
+        for page in range(_PERIPH_START, _PERIPH_END, 0x1000):
+            self._mapped_pages.add(page)
 
         # 5. Map system registers region (0xE0000000-0xE00FFFFF) with R+W
         uc.mem_map(_SYSTEM_REG_START, _SYSTEM_REG_END - _SYSTEM_REG_START, 3)
@@ -210,8 +216,20 @@ class UnicornRehostEngine:
             self._mapped_pages.add(page)
 
         # Set up hooks
-        uc.hook_add(UC_HOOK_MEM_READ_UNMAPPED, self._hook_mem_read_unmapped)
-        uc.hook_add(UC_HOOK_MEM_WRITE_UNMAPPED, self._hook_mem_write_unmapped)
+        # Use UC_HOOK_MEM_READ on peripheral range to intercept EVERY MMIO read
+        # (not just unmapped — the region is mapped but we override values via hook)
+        uc.hook_add(UC_HOOK_MEM_READ, self._hook_periph_read,
+                     begin=_PERIPH_START, end=_PERIPH_END - 1)
+        uc.hook_add(UC_HOOK_MEM_WRITE, self._hook_periph_write,
+                     begin=_PERIPH_START, end=_PERIPH_END - 1)
+        # System register reads/writes
+        uc.hook_add(UC_HOOK_MEM_READ, self._hook_sysreg_read,
+                     begin=_SYSTEM_REG_START, end=_SYSTEM_REG_END - 1)
+        uc.hook_add(UC_HOOK_MEM_WRITE, self._hook_sysreg_write,
+                     begin=_SYSTEM_REG_START, end=_SYSTEM_REG_END - 1)
+        # Unmapped access outside peripheral/system = crash
+        uc.hook_add(UC_HOOK_MEM_READ_UNMAPPED, self._hook_unmapped_access)
+        uc.hook_add(UC_HOOK_MEM_WRITE_UNMAPPED, self._hook_unmapped_access)
         uc.hook_add(UC_HOOK_BLOCK, self._hook_block)
         uc.hook_add(UC_HOOK_CODE, self._hook_code)
 
@@ -384,88 +402,54 @@ class UnicornRehostEngine:
     # MMIO hooks with PIP routing
     # ------------------------------------------------------------------
 
-    def _map_page_if_needed(self, uc, address: int) -> bool:
-        """Map a 4KB page if not already mapped. Returns True if mapped."""
-        page_base = address & ~0xFFF
-        if page_base in self._mapped_pages:
-            return True
-        try:
-            uc.mem_map(page_base, 0x1000, 3)  # R+W
-            self._mapped_pages.add(page_base)
-            return True
-        except Exception:
-            return False
+    def _hook_periph_read(self, uc, access, address, size, value, user_data):
+        """Intercept EVERY read in the peripheral MMIO range.
 
-    def _hook_mem_read_unmapped(self, uc, access, address, size, value, user_data):
-        """Handle unmapped memory reads with PIP routing.
-
-        Routing:
-        - Peripheral range (0x40000000-0x5FFFFFFF): SVD -> PIP -> fallback
-        - System registers (0xE0000000-0xE00FFFFF): system reg handler
-        - Other: crash (unmapped non-peripheral access)
+        Routes through CompositeMMIOHandler (SVD -> PIP -> fallback).
+        The peripheral region is mapped as R+W so this hook fires on every
+        access, not just the first (unlike UC_HOOK_MEM_READ_UNMAPPED).
         """
-        if _PERIPH_START <= address < _PERIPH_END:
-            # Peripheral MMIO range -> route through composite handler
-            try:
-                result = self._mmio_handler.read(address, size)
-            except InputExhausted:
-                self._stopped = True
-                self._stop_reason = "input_exhausted"
-                self._stop_reason_enum = StopReason.INPUT_EXHAUSTED
-                uc.emu_stop()
-                return False
-            self._map_page_if_needed(uc, address)
-            uc.mem_write(address, struct.pack("<I", result & 0xFFFFFFFF)[:size])
-            return True
-
-        elif _SYSTEM_REG_START <= address < _SYSTEM_REG_END:
-            # System registers -> composite handler routes to CortexMSystemRegisters
+        try:
             result = self._mmio_handler.read(address, size)
-            self._map_page_if_needed(uc, address)
-            uc.mem_write(address, struct.pack("<I", result & 0xFFFFFFFF)[:size])
-            return True
-
-        else:
-            # Non-peripheral unmapped access -> crash
+        except InputExhausted:
             self._stopped = True
-            self._stop_reason = "unmapped_access"
-            self._stop_reason_enum = StopReason.UNMAPPED_ACCESS
-            self._crash_address = address
-            self._crash_type = f"unmapped_read at 0x{address:08X}"
-            logger.debug("Unmapped non-peripheral read at 0x%08X", address)
+            self._stop_reason = "input_exhausted"
+            self._stop_reason_enum = StopReason.INPUT_EXHAUSTED
             uc.emu_stop()
-            return False
+            return
+        # Write the PIP/SVD result into mapped memory so the CPU reads it
+        uc.mem_write(address, struct.pack("<I", result & 0xFFFFFFFF)[:size])
 
-    def _hook_mem_write_unmapped(self, uc, access, address, size, value, user_data):
-        """Handle unmapped memory writes with PIP routing."""
-        if _PERIPH_START <= address < _PERIPH_END:
-            # Peripheral MMIO write
-            try:
-                self._mmio_handler.write(address, value, size)
-            except InputExhausted:
-                self._stopped = True
-                self._stop_reason = "input_exhausted"
-                self._stop_reason_enum = StopReason.INPUT_EXHAUSTED
-                uc.emu_stop()
-                return False
-            self._map_page_if_needed(uc, address)
-            return True
-
-        elif _SYSTEM_REG_START <= address < _SYSTEM_REG_END:
+    def _hook_periph_write(self, uc, access, address, size, value, user_data):
+        """Intercept EVERY write in the peripheral MMIO range."""
+        try:
             self._mmio_handler.write(address, value, size)
-            self._map_page_if_needed(uc, address)
-            return True
-
-        else:
-            # Non-peripheral unmapped access -> crash
+        except InputExhausted:
             self._stopped = True
-            self._stop_reason = "unmapped_access"
-            self._stop_reason_enum = StopReason.UNMAPPED_ACCESS
-            self._crash_address = address
-            self._crash_type = f"unmapped_write at 0x{address:08X}"
-            logger.debug("Unmapped non-peripheral write at 0x%08X", address)
+            self._stop_reason = "input_exhausted"
+            self._stop_reason_enum = StopReason.INPUT_EXHAUSTED
             uc.emu_stop()
-            return False
+
+    def _hook_sysreg_read(self, uc, access, address, size, value, user_data):
+        """Intercept reads in the system register range (0xE0000000+)."""
+        result = self._mmio_handler.read(address, size)
+        uc.mem_write(address, struct.pack("<I", result & 0xFFFFFFFF)[:size])
+
+    def _hook_sysreg_write(self, uc, access, address, size, value, user_data):
+        """Intercept writes in the system register range."""
+        self._mmio_handler.write(address, value, size)
+
+    def _hook_unmapped_access(self, uc, access, address, size, value, user_data):
+        """Handle unmapped access outside peripheral/system ranges = crash."""
+        is_write = access in (2, 3, 4, 5)  # UC_MEM_WRITE variants
+        self._stopped = True
+        self._stop_reason = "unmapped_access"
+        self._stop_reason_enum = StopReason.UNMAPPED_ACCESS
+        self._crash_address = address
+        self._crash_type = f"unmapped_{'write' if is_write else 'read'} at 0x{address:08X}"
+        logger.debug("Unmapped access at 0x%08X (crash)", address)
+        uc.emu_stop()
+        return False
 
     # ------------------------------------------------------------------
     # Block hook (coverage + interrupts)
