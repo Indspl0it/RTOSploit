@@ -127,15 +127,40 @@ class UnicornRehostEngine:
         self._mapped_pages.clear()
 
         # Map memory regions from firmware sections
+        # Skip sections in ranges we map explicitly (SRAM, peripheral, system regs)
+        _SKIP_RANGES = [
+            (0x20000000, 0x20000000 + self._sram_size),  # SRAM (mapped below)
+            (_PERIPH_START, _PERIPH_END),          # Peripheral MMIO (unmapped for PIP)
+            (_SYSTEM_REG_START, _SYSTEM_REG_END),          # System registers (mapped below)
+        ]
+
         if self._firmware.sections:
             for section in self._firmware.sections:
-                if not section.data:
+                if not section.data or len(section.data) == 0:
                     continue
+
+                # Skip sections in explicitly managed ranges
+                skip = False
+                for range_start, range_end in _SKIP_RANGES:
+                    if section.address >= range_start and section.address < range_end:
+                        skip = True
+                        break
+                if skip:
+                    continue
+
                 # Align to 4KB page boundary
                 base = section.address & ~0xFFF
-                end = section.address + section.size
+                end = section.address + len(section.data)
                 size = ((end - base) + 0xFFF) & ~0xFFF
                 size = max(size, 0x1000)
+
+                # Check for overlap with already-mapped pages
+                overlap = any(
+                    page in self._mapped_pages
+                    for page in range(base, base + size, 0x1000)
+                )
+                if overlap:
+                    continue
 
                 # Determine permissions
                 perms = section.permissions if hasattr(section, 'permissions') else "rx"
@@ -150,11 +175,10 @@ class UnicornRehostEngine:
                 try:
                     uc.mem_map(base, size, uc_perms or 7)
                     uc.mem_write(section.address, section.data)
-                    # Track mapped pages
                     for page in range(base, base + size, 0x1000):
                         self._mapped_pages.add(page)
                 except Exception:
-                    pass  # Region may overlap, skip
+                    pass  # Skip on any mapping error
         else:
             # Raw binary: map at base address with R+X
             base = self._firmware.base_address & ~0xFFF
