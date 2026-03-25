@@ -80,23 +80,25 @@ jobs:
         if: always()
 ```
 
-### Scan with Native Fuzzer
+### Scan with Unicorn Fuzzing (No QEMU Required)
+
+For real hardware firmware where QEMU machine matching is not available, use the Unicorn engine with PIP:
 
 ```yaml
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install RTOSploit with Unicorn
+        run: pip install -e . unicorn
 
-      - name: Build native fuzzer
-        run: cargo build --release -p rtosploit-fuzzer
-
-      - name: Run scan with real fuzzing
+      - name: Run Unicorn-based fuzz scan
         run: |
-          rtosploit scan \
-            --firmware firmware.bin \
-            --machine mps2-an385 \
-            --fuzz-timeout 300 \
-            --output scan-output
+          rtosploit fuzz \
+            --firmware firmware.elf \
+            --engine unicorn \
+            --auto \
+            --timeout 300 \
+            --output fuzz-output
 ```
+
+This runs at ~700 exec/sec without QEMU, using Peripheral Input Playback for model-free MMIO handling.
 
 ### Analysis-Only (No Fuzzing)
 
