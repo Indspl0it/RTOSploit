@@ -115,90 +115,96 @@ class UnicornRehostEngine:
     # Setup
     # ------------------------------------------------------------------
 
+    def _detect_memory_regions(self) -> tuple[tuple[int, int], tuple[int, int]]:
+        """Detect flash and SRAM regions from firmware.
+
+        Follows the Ember-IO approach: identify two contiguous memory
+        regions (flash for code/rodata, SRAM for data/bss) rather than
+        mapping individual sections which can overlap or leave gaps.
+
+        Returns:
+            ((flash_base, flash_size), (sram_base, sram_size))
+        """
+        flash_base = self._firmware.base_address
+        flash_size = 256 * 1024  # Default 256KB
+
+        if self._firmware.sections:
+            # Classify sections by address range
+            code_sections = [
+                s for s in self._firmware.sections
+                if s.address < 0x20000000 and s.data and len(s.data) > 0
+            ]
+            if code_sections:
+                flash_base = min(s.address for s in code_sections) & ~0xFFF
+                flash_end = max(s.address + len(s.data) for s in code_sections)
+                flash_size = max(((flash_end - flash_base + 0xFFF) & ~0xFFF), 0x1000)
+                # Ensure vector table is included (starts at base 0 for Cortex-M)
+                if flash_base > 0 and self._firmware.base_address == 0:
+                    flash_base = 0
+                    flash_size = max(flash_size, ((flash_end + 0xFFF) & ~0xFFF))
+        elif len(self._firmware.data) > 0:
+            # Raw binary: flash = entire firmware data
+            flash_size = ((len(self._firmware.data) + 0xFFF) & ~0xFFF)
+
+        # Clamp flash to reasonable size (max 16MB)
+        flash_size = min(flash_size, 16 * 1024 * 1024)
+
+        sram_base = 0x20000000
+        sram_size = ((self._sram_size + 0xFFF) & ~0xFFF)
+
+        return (flash_base, flash_size), (sram_base, sram_size)
+
     def setup(self) -> None:
         """Initialize Unicorn engine and load firmware.
 
-        Maps firmware flash, SRAM, and system register regions.
-        Intentionally does NOT map the peripheral region (0x40000000-0x5FFFFFFF)
-        so MMIO accesses trigger unmapped hooks for PIP/SVD handling.
+        Memory layout (following Ember-IO approach):
+        - Flash region: R+X, contains code and read-only data
+        - SRAM region: R+W, contains .data, .bss, stack, heap
+        - Peripheral region (0x40000000-0x5FFFFFFF): intentionally unmapped
+          so MMIO accesses trigger hooks for PIP/SVD handling
+        - System registers (0xE0000000-0xE00FFFFF): R+W with defaults
         """
         self._uc = Uc(UC_ARCH_ARM, UC_MODE_THUMB | UC_MODE_LITTLE_ENDIAN)
         uc = self._uc
         self._mapped_pages.clear()
 
-        # Map memory regions from firmware sections
-        # Skip sections in ranges we map explicitly (SRAM, peripheral, system regs)
-        _SKIP_RANGES = [
-            (0x20000000, 0x20000000 + self._sram_size),  # SRAM (mapped below)
-            (_PERIPH_START, _PERIPH_END),          # Peripheral MMIO (unmapped for PIP)
-            (_SYSTEM_REG_START, _SYSTEM_REG_END),          # System registers (mapped below)
-        ]
+        (flash_base, flash_size), (sram_base, sram_size) = self._detect_memory_regions()
 
+        # 1. Map flash region (R+X) — code and read-only data
+        uc.mem_map(flash_base, flash_size, 5)  # UC_PROT_READ | UC_PROT_EXEC
+        for page in range(flash_base, flash_base + flash_size, 0x1000):
+            self._mapped_pages.add(page)
+
+        # 2. Map SRAM region (R+W+X) — data, bss, stack, heap
+        # R+W+X because some firmware executes from SRAM (copied ISR trampolines)
+        uc.mem_map(sram_base, sram_size, 7)  # UC_PROT_ALL
+        for page in range(sram_base, sram_base + sram_size, 0x1000):
+            self._mapped_pages.add(page)
+
+        # 3. Write firmware data into mapped regions
         if self._firmware.sections:
             for section in self._firmware.sections:
                 if not section.data or len(section.data) == 0:
                     continue
-
-                # Skip sections in explicitly managed ranges
-                skip = False
-                for range_start, range_end in _SKIP_RANGES:
-                    if section.address >= range_start and section.address < range_end:
-                        skip = True
-                        break
-                if skip:
+                # Skip peripheral and system register sections
+                if _PERIPH_START <= section.address < _PERIPH_END:
                     continue
-
-                # Align to 4KB page boundary
-                base = section.address & ~0xFFF
-                end = section.address + len(section.data)
-                size = ((end - base) + 0xFFF) & ~0xFFF
-                size = max(size, 0x1000)
-
-                # Check for overlap with already-mapped pages
-                overlap = any(
-                    page in self._mapped_pages
-                    for page in range(base, base + size, 0x1000)
-                )
-                if overlap:
+                if _SYSTEM_REG_START <= section.address < _SYSTEM_REG_END:
                     continue
-
-                # Determine permissions
-                perms = section.permissions if hasattr(section, 'permissions') else "rx"
-                uc_perms = 0
-                if "r" in perms:
-                    uc_perms |= 1  # UC_PROT_READ
-                if "w" in perms:
-                    uc_perms |= 2  # UC_PROT_WRITE
-                if "x" in perms:
-                    uc_perms |= 4  # UC_PROT_EXEC
-
+                # Write section data into the appropriate mapped region
                 try:
-                    uc.mem_map(base, size, uc_perms or 7)
                     uc.mem_write(section.address, section.data)
-                    for page in range(base, base + size, 0x1000):
-                        self._mapped_pages.add(page)
-                except Exception:
-                    pass  # Skip on any mapping error
+                except Exception as e:
+                    logger.debug(f"Could not write section {section.name} at "
+                                f"0x{section.address:08X}: {e}")
         else:
-            # Raw binary: map at base address with R+X
-            base = self._firmware.base_address & ~0xFFF
-            size = ((len(self._firmware.data) + 0xFFF) & ~0xFFF) + 0x1000
-            uc.mem_map(base, size, 5)  # UC_PROT_READ | UC_PROT_EXEC
+            # Raw binary: write entire firmware data to flash base
             uc.mem_write(self._firmware.base_address, self._firmware.data)
-            for page in range(base, base + size, 0x1000):
-                self._mapped_pages.add(page)
 
-        # Map SRAM with R+W permissions
-        sram_base = 0x20000000
-        sram_size = ((self._sram_size + 0xFFF) & ~0xFFF)
-        uc.mem_map(sram_base, sram_size, 3)  # UC_PROT_READ | UC_PROT_WRITE
-        for page in range(sram_base, sram_base + sram_size, 0x1000):
-            self._mapped_pages.add(page)
-
-        # Peripheral region (0x40000000-0x5FFFFFFF): intentionally NOT mapped
+        # 4. Peripheral region (0x40000000-0x5FFFFFFF): intentionally NOT mapped
         # MMIO accesses trigger unmapped hooks -> PIP/SVD/fallback
 
-        # Map system registers region (0xE0000000-0xE00FFFFF) with R+W
+        # 5. Map system registers region (0xE0000000-0xE00FFFFF) with R+W
         uc.mem_map(_SYSTEM_REG_START, _SYSTEM_REG_END - _SYSTEM_REG_START, 3)
         for page in range(_SYSTEM_REG_START, _SYSTEM_REG_END, 0x1000):
             self._mapped_pages.add(page)

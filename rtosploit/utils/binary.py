@@ -280,27 +280,45 @@ def load_elf(path: Path) -> FirmwareImage:
     if base_address is None:
         base_address = 0
 
-    # Build flat data blob from sections ordered by address
-    # Cap at 16MB to avoid multi-hundred-MB allocations when flash (0x0)
-    # and SRAM (0x20000000) sections span a 512MB address gap
-    _MAX_FLAT_SIZE = 16 * 1024 * 1024  # 16MB
+    # Build flat data blob from flash-range sections only.
+    # ELF firmware typically has .text at 0x0 (flash) and .bss at 0x20000000 (SRAM).
+    # Allocating a flat blob spanning the entire address range wastes hundreds of MB.
+    # Instead: only flatten sections in the flash region (below SRAM base).
+    _SRAM_BASE = 0x20000000
+    _MAX_FLAT_SIZE = 16 * 1024 * 1024  # 16MB safety cap
     if sections:
-        sorted_sections = sorted(sections, key=lambda s: s.address)
-        end_addr = max(s.address + s.size for s in sorted_sections)
-        flat_size = end_addr - base_address
-        if flat_size > _MAX_FLAT_SIZE:
-            # Only flatten code/data sections, skip the address gap
-            code_sections = [s for s in sorted_sections if s.data and len(s.data) > 0]
-            if code_sections:
-                end_addr = max(s.address + len(s.data) for s in code_sections)
+        # Separate flash sections (< SRAM_BASE) from SRAM sections
+        flash_sections = sorted(
+            [s for s in sections if s.address < _SRAM_BASE and s.data and len(s.data) > 0],
+            key=lambda s: s.address,
+        )
+        if flash_sections:
+            end_addr = max(s.address + len(s.data) for s in flash_sections)
+            flat_size = min(end_addr - base_address, _MAX_FLAT_SIZE)
+        else:
+            # No flash sections — use all sections with data
+            all_data = sorted(
+                [s for s in sections if s.data and len(s.data) > 0],
+                key=lambda s: s.address,
+            )
+            if all_data:
+                end_addr = max(s.address + len(s.data) for s in all_data)
                 flat_size = min(end_addr - base_address, _MAX_FLAT_SIZE)
-        flat = bytearray(flat_size)
-        for sec in sorted_sections:
-            off = sec.address - base_address
-            end = off + len(sec.data)
-            if 0 <= off < flat_size:
-                flat[off:end] = sec.data[:flat_size - off]
-        data = bytes(flat)
+            else:
+                flat_size = 0
+
+        if flat_size > 0:
+            flat = bytearray(flat_size)
+            for sec in sections:
+                if not sec.data or len(sec.data) == 0:
+                    continue
+                off = sec.address - base_address
+                end = off + len(sec.data)
+                if 0 <= off < flat_size:
+                    flat[off:min(end, flat_size)] = sec.data[:flat_size - off]
+            data = bytes(flat)
+        else:
+            data = raw
     else:
         data = raw
 
