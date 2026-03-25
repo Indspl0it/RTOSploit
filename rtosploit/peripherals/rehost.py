@@ -276,6 +276,13 @@ class RehostingEngine:
             logger.warning("SVD model creation failed, continuing without SVD: %s", exc)
 
         # -- Step (f): Build CompositeMMIOHandler ----------------------------
+        # NOTE: The CompositeMMIOHandler is constructed here for diagnostics and
+        # future use, but is NOT wired into the QEMU execution loop yet.
+        # Routing MMIO accesses through GDB watchpoints is prohibitively expensive
+        # (each watchpoint hit requires a full GDB stop-inspect-resume cycle).
+        # For now, only HAL function intercepts (breakpoint-based) are active.
+        # MMIO-level interception is planned for a future release using QEMU's
+        # memory region callback API or a custom QEMU plugin.
         try:
             fallback = MMIOFallbackModel()
             system_regs = CortexMSystemRegisters()
@@ -285,8 +292,11 @@ class RehostingEngine:
                 system_regs=system_regs,
             )
             self._composite_mmio = composite
-            logger.info(
-                "CompositeMMIOHandler ready: %d SVD models + fallback + system regs",
+            logger.warning(
+                "CompositeMMIOHandler built (%d SVD models) but MMIO interception "
+                "is NOT active — only HAL function hooks are wired to the execution "
+                "loop. GDB watchpoint-based MMIO routing is too expensive for "
+                "real-time use.",
                 len(svd_models),
             )
         except Exception as exc:

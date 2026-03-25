@@ -140,7 +140,11 @@ def _vendor_from_mcu(mcu_family: str) -> str:
     for prefix in sorted(_MCU_TO_VENDOR.keys(), key=len, reverse=True):
         if key.startswith(prefix):
             return _MCU_TO_VENDOR[prefix]
-    return "stm32"  # safest default — most complete model set
+    logger.warning(
+        "No vendor detected for MCU family '%s' — generic models will be used",
+        mcu_family,
+    )
+    return ""  # no vendor — use generic models
 
 
 def _vendor_from_fingerprint(fingerprint: RTOSFingerprint) -> str:
@@ -162,8 +166,14 @@ def _filter_peripherals_by_usage(
 
     Checks:
     1. Symbol names that reference the peripheral name
-    2. MMIO address ranges present in firmware data sections
-    3. Critical peripheral whitelist (always included)
+    2. Critical peripheral whitelist (always included)
+
+    Note: Raw byte-matching for MMIO base addresses (struct.pack("<I", addr))
+    was removed because a 4-byte constant can appear anywhere in firmware data
+    and produces too many false positives. For accurate MMIO access detection,
+    use the 6-layer peripheral detection engine
+    (rtosploit.analysis.detection.aggregator) which combines register access
+    patterns, binary signatures, devicetree labels, and other evidence sources.
     """
     used: list[SVDPeripheral] = []
     seen_names: set[str] = set()
@@ -172,13 +182,6 @@ def _filter_peripherals_by_usage(
     sym_text = ""
     if firmware.symbols:
         sym_text = " ".join(firmware.symbols.keys()).lower()
-
-    # Collect firmware data address ranges for MMIO detection
-    data_ranges: list[tuple[int, int]] = []
-    if firmware.sections:
-        for sec in firmware.sections:
-            if sec.data and len(sec.data) > 0:
-                data_ranges.append((sec.address, sec.address + sec.size))
 
     for periph in svd_device.peripherals:
         name_upper = periph.name.upper()
@@ -204,17 +207,6 @@ def _filter_peripherals_by_usage(
                 used.append(periph)
                 seen_names.add(name_upper)
             continue
-
-        # Check MMIO address overlap with firmware constants
-        # Search for the base address as a 4-byte LE value in firmware data
-        if firmware.data and len(firmware.data) >= 4:
-            import struct
-            addr_bytes = struct.pack("<I", periph.base_address)
-            if addr_bytes in firmware.data:
-                if name_upper not in seen_names:
-                    used.append(periph)
-                    seen_names.add(name_upper)
-                    continue
 
     return used
 

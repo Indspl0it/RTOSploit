@@ -971,7 +971,7 @@ rtosploit vulnrange writeup CVE-2021-43997        # Full writeup
 | `freertos/isr_hijack` | ISR Hijacking | — | VTOR exception vector redirection (SVC/PendSV/SysTick) |
 | `freertos/mpu_bypass` | MPU Bypass | CVE-2021-43997 | xPortRaisePrivilege() callable from unprivileged (v10.2–10.4.5) |
 | `freertos/mpu_bypass_rop` | MPU + ROP | CVE-2024-28115 | Stack overflow ROP chain to disable MPU (v10.0–10.6.1) |
-| `freertos/tcp_stack` | Network | CVE-2018-16525, CVE-2025-5688 | DNS/LLMNR response overflow |
+| `freertos/tcp_stack` | Network | CVE-2018-16525, CVE-2018-16528 | DNS/LLMNR response overflow |
 
 ### ThreadX (3 modules)
 

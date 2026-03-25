@@ -61,8 +61,12 @@ class MMIOFallbackModel:
     - First read at new address: return 0x00000001 (generic "ready" bit)
     - Subsequent reads at same address: return last written value, or "ready"
     - Track all accesses for diagnostics
-    - Detect poll loops: if same address read >10 times without write,
-      alternate between 0x0 and 0x1 to break the loop
+    - Detect poll loops: if same address read >100 times without write,
+      return 0x1 consistently (ready bit) to satisfy status checks.
+      Only after >1000 reads (extreme poll loop) alternate between 0x0
+      and 0x1 to break the loop. The conservative threshold avoids
+      disrupting legitimate firmware that polls a status register many
+      times during initialization or calibration sequences.
     """
 
     def __init__(self) -> None:
@@ -89,16 +93,25 @@ class MMIOFallbackModel:
             logger.debug("MMIO fallback read 0x%08X -> 0x%08X (echo)", address, value)
             return value
 
-        # Poll loop detection: alternate 0/1 after 10 reads
-        if count > 10:
+        # Poll loop detection: return ready bit after 100 reads, alternate
+        # only after 1000 reads (extreme poll loop) to avoid breaking
+        # legitimate firmware status polling during init/calibration.
+        if count > 1000:
             value = 0x1 if (count % 2 == 0) else 0x0
             logger.debug(
-                "MMIO fallback read 0x%08X -> 0x%08X (poll loop #%d)",
+                "MMIO fallback read 0x%08X -> 0x%08X (extreme poll loop #%d)",
                 address,
                 value,
                 count,
             )
             return value
+        if count > 100:
+            logger.debug(
+                "MMIO fallback read 0x%08X -> 0x00000001 (poll loop #%d, returning ready)",
+                address,
+                count,
+            )
+            return 0x00000001
 
         # Default: return "ready" bit
         logger.debug("MMIO fallback read 0x%08X -> 0x00000001 (ready default)", address)

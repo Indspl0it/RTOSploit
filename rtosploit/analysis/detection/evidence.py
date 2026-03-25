@@ -50,10 +50,20 @@ class ConfidenceLevel(Enum):
 
 @dataclass
 class PeripheralDetection:
-    """A detected peripheral with aggregated evidence."""
+    """A detected peripheral with aggregated evidence.
+
+    Attributes:
+        confidence: Evidence accumulation score — the sum of all evidence
+            weights for this peripheral.  This is NOT a probability and CAN
+            exceed 1.0 when multiple independent evidence sources (symbol,
+            register access, devicetree, etc.) all corroborate the same
+            peripheral.  Higher values indicate stronger multi-layer
+            agreement.  Use ``confidence_level`` for a coarse HIGH/MEDIUM/LOW
+            classification.
+    """
     name: str
     peripheral_type: str
-    confidence: float  # Sum of evidence weights
+    confidence: float  # Sum of evidence weights (can exceed 1.0)
     evidence: list[Evidence] = field(default_factory=list)
     base_address: Optional[int] = None
     vendor: str = ""
@@ -90,6 +100,7 @@ class DetectionResult:
                     "name": det.name,
                     "type": det.peripheral_type,
                     "confidence": round(det.confidence, 3),
+                    "confidence_note": "evidence accumulation score (sum of weights), not a probability — values > 1.0 indicate strong multi-layer agreement",
                     "confidence_level": det.confidence_level.value,
                     "base_address": f"0x{det.base_address:08x}" if det.base_address is not None else None,
                     "vendor": det.vendor,

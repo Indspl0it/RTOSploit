@@ -195,7 +195,7 @@ def test_cve_2024_28115_difficulty(manager: VulnRangeManager):
     "CVE-2018-16525",
     "CVE-2021-43997",
     "CVE-2024-28115",
-    "CVE-2025-5688",
+    "CVE-2018-16528",
     "KOM-ThreadX",
 ])
 def test_exploit_py_valid_syntax(range_id: str):
@@ -214,7 +214,7 @@ def test_exploit_py_valid_syntax(range_id: str):
     "CVE-2018-16525",
     "CVE-2021-43997",
     "CVE-2024-28115",
-    "CVE-2025-5688",
+    "CVE-2018-16528",
     "KOM-ThreadX",
 ])
 def test_writeup_md_exists(range_id: str):
@@ -277,7 +277,7 @@ def test_cve_2021_43997_difficulty_beginner(manager: VulnRangeManager):
 
 
 def test_cve_2025_5688_category(manager: VulnRangeManager):
-    manifest = manager.get("CVE-2025-5688")
+    manifest = manager.get("CVE-2018-16528")
     assert manifest.category == "heap_corruption"
 
 

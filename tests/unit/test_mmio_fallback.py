@@ -32,25 +32,35 @@ class TestMMIOFallbackModel:
         fb.write_register(0x40001000, 0xDEADBEEF)
         assert fb.read_register(0x40001000) == 0xDEADBEEF
 
-    def test_poll_loop_alternates_after_10_reads(self, fb: MMIOFallbackModel) -> None:
-        """After >10 reads without a write, values alternate between 0 and 1."""
+    def test_poll_loop_returns_ready_after_100_reads(self, fb: MMIOFallbackModel) -> None:
+        """After >100 reads without a write, returns 0x1 (ready bit) consistently."""
         addr = 0x40002000
-        # First 10 reads return 0x1 (ready bit)
-        for _ in range(10):
+        # First 100 reads return 0x1 (ready bit)
+        for _ in range(100):
             fb.read_register(addr)
 
-        # Reads 11+ should alternate 0/1
-        val_11 = fb.read_register(addr)  # count=11, odd -> 0
-        val_12 = fb.read_register(addr)  # count=12, even -> 1
-        assert val_11 != val_12
-        assert val_11 in (0x0, 0x1)
-        assert val_12 in (0x0, 0x1)
+        # Reads 101-200 should all return 0x1 (ready)
+        for _ in range(100):
+            assert fb.read_register(addr) == 0x00000001
+
+    def test_extreme_poll_loop_alternates_after_1000_reads(self, fb: MMIOFallbackModel) -> None:
+        """After >1000 reads without a write, values alternate between 0 and 1."""
+        addr = 0x40002000
+        for _ in range(1000):
+            fb.read_register(addr)
+
+        # Reads 1001+ should alternate 0/1
+        val_a = fb.read_register(addr)  # count=1001, odd -> 0
+        val_b = fb.read_register(addr)  # count=1002, even -> 1
+        assert val_a != val_b
+        assert val_a in (0x0, 0x1)
+        assert val_b in (0x0, 0x1)
 
     def test_write_resets_read_count(self, fb: MMIOFallbackModel) -> None:
         """Writing to an address resets the read counter."""
         addr = 0x40003000
-        # Read 15 times (enters poll-loop territory)
-        for _ in range(15):
+        # Read 150 times (enters poll-loop territory)
+        for _ in range(150):
             fb.read_register(addr)
 
         # Write resets counter

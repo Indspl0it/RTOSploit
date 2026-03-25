@@ -67,14 +67,14 @@
   },
   {
     "cve_id": "CVE-2018-16528",
-    "description": "FreeRTOS heap overflow in event groups xEventGroupSetBitsFromISR allows code execution",
-    "cvss_score": 7.5,
-    "severity": "high",
+    "description": "FreeRTOS+TCP LLMNR response processing buffer overflow allows remote code execution via crafted LLMNR packets",
+    "cvss_score": 9.8,
+    "severity": "critical",
     "affected_product": "freertos",
     "affected_versions": ["<=10.0.1"],
     "references": ["https://nvd.nist.gov/vuln/detail/CVE-2018-16528"],
     "published_date": "2018-10-08",
-    "has_exploit": false
+    "has_exploit": true
   },
   {
     "cve_id": "CVE-2021-31571",

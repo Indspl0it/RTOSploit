@@ -20,7 +20,7 @@ CFLAGS = -mcpu=cortex-m3 -mthumb -mfloat-abi=soft \
 
 LDFLAGS = -T mps2-an385.ld -nostartfiles -nostdlib
 
-RANGES = CVE-2018-16525 CVE-2021-43997 CVE-2024-28115 CVE-2025-5688 KOM-ThreadX
+RANGES = CVE-2018-16525 CVE-2021-43997 CVE-2024-28115 CVE-2018-16528 KOM-ThreadX
 
 .PHONY: all clean list $(RANGES)
 

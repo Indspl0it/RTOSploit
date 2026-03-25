@@ -32,12 +32,15 @@ class ZephyrBase(PeripheralModel):
         size: int = 0,
     ) -> None:
         super().__init__(name, base_addr, size)
-        self._device_counter = 0xDEAD0000
+        # Allocate device struct pointers in SRAM so firmware can safely
+        # dereference them. Each device gets 256 bytes of space.
+        self._next_device_addr = 0x20008000
 
     @hal_handler("device_get_binding")
     def handle_get_binding(self, cpu: CPUState) -> HandlerResult:
-        self._device_counter += 1
-        return HandlerResult(return_value=self._device_counter)
+        addr = self._next_device_addr
+        self._next_device_addr += 0x100  # 256 bytes per device struct
+        return HandlerResult(return_value=addr)
 
     @hal_handler("device_is_ready")
     def handle_is_ready(self, cpu: CPUState) -> HandlerResult:

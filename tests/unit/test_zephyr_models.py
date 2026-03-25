@@ -32,7 +32,7 @@ class TestZephyrBase:
         result = m._find_handler("device_get_binding")(_cpu())
         assert result.intercept is True
         assert result.return_value != 0  # non-zero pointer
-        assert result.return_value > 0xDEAD0000
+        assert 0x20000000 <= result.return_value < 0x20100000  # valid SRAM region
 
     def test_zephyr_base_device_get_binding_unique(self):
         m = ZephyrBase()
