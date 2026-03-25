@@ -60,3 +60,4 @@ results/
 fuzz-output/
 scan-output/
 vulnrange/downloaded_firmware/
+dynamic_test_report.md

@@ -17,7 +17,7 @@ from rtosploit.emulation.qmp import QMPClient
 from rtosploit.utils.binary import load_firmware
 
 
-_MIN_QEMU_VERSION = (8, 0)
+_MIN_QEMU_VERSION = (7, 0)
 
 
 class QEMUInstance:
@@ -38,6 +38,8 @@ class QEMUInstance:
 
     _ARCH_TO_QEMU = {
         "arm": "qemu-system-arm",
+        "armv7m": "qemu-system-arm",
+        "armv8m": "qemu-system-arm",
         "aarch64": "qemu-system-aarch64",
         "xtensa": "qemu-system-xtensa",
         "riscv32": "qemu-system-riscv32",
@@ -96,7 +98,9 @@ class QEMUInstance:
 
         raise QEMUCrashError(
             f"{arch_binary} >= {_MIN_QEMU_VERSION[0]}.{_MIN_QEMU_VERSION[1]} not found. "
-            f"Install via: apt-get install {arch_binary} or build from source."
+            f"RTOSploit requires QEMU {_MIN_QEMU_VERSION[0]}.{_MIN_QEMU_VERSION[1]}+. "
+            f"Please upgrade: https://www.qemu.org/download/ or "
+            f"install via: apt-get install {arch_binary}"
         )
 
     def _build_command_line(

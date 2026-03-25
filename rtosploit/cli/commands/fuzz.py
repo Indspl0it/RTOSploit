@@ -47,11 +47,11 @@ def fuzz(ctx, firmware, machine, rtos, output, seeds, timeout, jobs,
     # Auto mode: fingerprint firmware and discover input points
     injector = None
     if auto_mode:
-        from rtosploit.utils.binary import FirmwareImage
+        from rtosploit.utils.binary import load_firmware
         from rtosploit.analysis.fingerprint import fingerprint_firmware
         from rtosploit.fuzzing.input_injector import InputInjector
 
-        fw_image = FirmwareImage.load(firmware)
+        fw_image = load_firmware(firmware)
         fp = fingerprint_firmware(fw_image)
 
         if not output_json:

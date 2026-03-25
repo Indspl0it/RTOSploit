@@ -33,6 +33,16 @@ def rehost(ctx, firmware, machine, peripheral_config, auto_mode, save_config, sv
     if auto_mode is None:
         auto_mode = peripheral_config is None
 
+    # Resolve machine name if set to "auto"
+    if machine == "auto":
+        from rtosploit.utils.binary import load_firmware
+        from rtosploit.analysis.fingerprint import fingerprint_firmware
+        from rtosploit.peripherals.auto_config import resolve_qemu_machine
+        fw = load_firmware(firmware)
+        fp = fingerprint_firmware(fw)
+        machine = resolve_qemu_machine(fp.mcu_family, fp.architecture)
+        console.print(f"  Auto-detected machine: [cyan]{machine}[/cyan]")
+
     output_json = ctx.obj.get("output_json", False)
 
     if output_json:
