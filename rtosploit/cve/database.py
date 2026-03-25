@@ -63,6 +63,7 @@ class CVEDatabase:
         else:
             self._db_path = Path(__file__).parent / "bundled_cves.json"
         self._entries: list[CVEEntry] = []
+        self.load()
 
     def load(self) -> None:
         """Load the JSON database from disk."""
@@ -89,6 +90,9 @@ class CVEDatabase:
         for entry in self._entries:
             if entry.affected_product.lower() != product_lower:
                 continue
+            # When version is provided, filter by version constraints.
+            # When version is None, return ALL CVEs for the product — the
+            # user should see every CVE that *might* affect their firmware.
             if version is not None and entry.affected_versions:
                 if not any(
                     self._version_matches(version, constraint)

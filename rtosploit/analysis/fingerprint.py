@@ -146,7 +146,7 @@ _VERSION_PATTERNS: dict[str, list[str]] = {
     ],
     "zephyr": [
         r"Zephyr OS v(\d+\.\d+[\.\d]*)",
-        r"Zephyr OS build (\S+)",
+        r"Zephyr OS build v?(\d+\.\d+[\.\d]*)",
     ],
     "rtems": [
         r"RTEMS[^\d]*(\d+\.\d+[\.\d]*)",
@@ -154,7 +154,8 @@ _VERSION_PATTERNS: dict[str, list[str]] = {
     "esp-idf": [
         r"IDF_VER[:\s]*v?(\d+\.\d+[\.\d]*)",
         r"ESP-IDF v?(\d+\.\d+[\.\d]*)",
-        r"v(\d+\.\d+\.\d+)[\-\s]",
+        r"IDF version\s*:\s*v?(\d+\.\d+[\.\d]*)",
+        r"(?:[Ii][Dd][Ff]|[Ee][Ss][Pp]).{0,20}v(\d+\.\d+\.\d+)",
     ],
 }
 
@@ -163,8 +164,8 @@ _VERSION_PATTERNS: dict[str, list[str]] = {
 # ---------------------------------------------------------------------------
 
 _MCU_SYMBOL_PREFIXES: list[tuple[list[str], str]] = [
-    (["nrf_", "NRF_", "NRFX_", "nrfx_"], "nrf52"),
-    (["HAL_", "STM32", "stm32", "__HAL_RCC"], "stm32"),
+    (["nrf_", "NRF_", "NRFX_", "nrfx_", "softdevice", "sd_ble"], "nrf52"),
+    (["STM32", "stm32", "__HAL_RCC"], "stm32"),
     (["esp_", "CONFIG_IDF", "esp_idf"], "esp32"),
     (["LPC_", "CHIP_LPC", "Chip_"], "lpc"),
     (["cyhal_", "CYBLE_"], "psoc"),
@@ -334,21 +335,27 @@ def _detect_from_strings(firmware: FirmwareImage) -> dict[str, tuple[float, Opti
 # ---------------------------------------------------------------------------
 
 def _detect_mcu_family(firmware: FirmwareImage) -> tuple[str, list[str]]:
-    """Detect MCU family from symbols, strings, memory map, and architecture."""
+    """Detect MCU family from symbols, strings, memory map, and architecture.
+
+    Symbol-based evidence is weighted higher (2 votes) than string/path
+    fragments (1 vote) because symbols are a more reliable indicator —
+    string fragments can appear in cross-compiled toolchain paths unrelated
+    to the actual target MCU.
+    """
     evidence: list[str] = []
     candidates: dict[str, int] = {}  # mcu -> vote count
 
-    # 1. Symbol prefix matching
+    # 1. Symbol prefix matching (weight=2: more reliable than strings)
     if firmware.symbols:
         sym_names_lower = " ".join(firmware.symbols.keys())
         for prefixes, mcu in _MCU_SYMBOL_PREFIXES:
             for prefix in prefixes:
                 if prefix in sym_names_lower:
-                    candidates[mcu] = candidates.get(mcu, 0) + 1
+                    candidates[mcu] = candidates.get(mcu, 0) + 2
                     evidence.append(f"Symbol prefix '{prefix}' -> {mcu}")
                     break  # one prefix per group is enough
 
-    # 2. String/path fragment matching
+    # 2. String/path fragment matching (weight=1)
     strings = _scan_firmware_strings(firmware)
     full_text = " ".join(strings)
     for fragment, mcu in _MCU_PATH_FRAGMENTS:

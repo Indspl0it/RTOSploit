@@ -190,6 +190,25 @@ class PeripheralConfig:
             symbols=symbols,
         )
 
+    # --- Public properties (preferred API) ---
+
+    @property
+    def models(self) -> list[PeripheralModelSpec]:
+        """Peripheral model specifications."""
+        return list(self._models)
+
+    @property
+    def intercepts(self) -> list[InterceptSpec]:
+        """Intercept specifications."""
+        return list(self._intercepts)
+
+    @property
+    def symbols(self) -> dict[int, str]:
+        """Manual symbol table."""
+        return dict(self._symbols)
+
+    # --- Legacy accessors (kept for backward compatibility) ---
+
     def get_models(self) -> list[PeripheralModelSpec]:
         """Return list of peripheral model specifications."""
         return list(self._models)
