@@ -45,8 +45,9 @@ Thumbs.db
 *.log
 uv.lock
 
-# Test firmware (large binaries, not redistributable)
-test-firmware/
+# Test firmware (large vendor binaries, not redistributable)
+test-firmware/particle_fw/
+test-firmware/*.zip
 
 # Claude / AI development artifacts
 .claude/
