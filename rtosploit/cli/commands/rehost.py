@@ -45,6 +45,11 @@ def rehost(ctx, firmware, machine, peripheral_config, auto_mode, save_config, sv
 
     output_json = ctx.obj.get("output_json", False)
 
+    # Unicorn engine path
+    if engine == "unicorn":
+        _rehost_unicorn(ctx, firmware, auto_mode, svd, timeout)
+        return
+
     if output_json:
         _rehost_json(ctx, firmware, machine, peripheral_config, auto_mode, save_config, svd, engine, timeout)
         return
@@ -195,6 +200,78 @@ def _rehost_rich(ctx, firmware, machine, peripheral_config, auto_mode, save_conf
         raise
     finally:
         qemu.stop()
+
+    console.print("[green]Rehosting complete.[/green]")
+
+
+def _rehost_unicorn(ctx, firmware, auto_mode, svd, timeout):
+    """Unicorn-based rehosting with PIP handler."""
+    from rtosploit.utils.binary import load_firmware
+    from rtosploit.peripherals.unicorn_engine import UnicornRehostEngine, HAS_UNICORN
+    from rtosploit.peripherals.models.mmio_fallback import CompositeMMIOHandler
+    from rtosploit.peripherals.interrupt_scheduler import InterruptScheduler, discover_irqs
+
+    if not HAS_UNICORN:
+        console.print("[red]Error:[/red] unicorn package not installed. Install with: pip install unicorn")
+        return
+
+    output_json = ctx.obj.get("output_json", False)
+
+    fw = load_firmware(firmware)
+    handler = CompositeMMIOHandler()
+    engine = UnicornRehostEngine(fw, mmio_handler=handler)
+    engine.setup()
+
+    # Discover and configure interrupts
+    try:
+        irq_list = discover_irqs(fw)
+        if irq_list:
+            scheduler = InterruptScheduler(irq_list, interval=1000)
+            engine.set_interrupt_scheduler(scheduler)
+    except Exception:
+        irq_list = []
+
+    timeout_ms = timeout * 1000 if timeout > 0 else 30000
+
+    if output_json:
+        import json
+        reason = engine.run(timeout_ms=timeout_ms)
+        result = {
+            "firmware": firmware,
+            "engine": "unicorn",
+            "auto_mode": auto_mode,
+            "status": "completed",
+            "stop_reason": reason,
+            "execution_count": engine.execution_count,
+            "block_count": engine.block_count,
+            "irqs_discovered": len(irq_list),
+            "mmio_stats": engine.mmio_stats,
+        }
+        click.echo(json.dumps(result, indent=2, default=str))
+    else:
+        console.print("[bold green]RTOSploit Unicorn Rehosting[/bold green]")
+        console.print(f"  Firmware:     [cyan]{firmware}[/cyan]")
+        console.print("  Engine:       [cyan]unicorn[/cyan]")
+        console.print(f"  IRQs:         [cyan]{len(irq_list)} discovered[/cyan]")
+        if timeout:
+            console.print(f"  Timeout:      [cyan]{timeout}s[/cyan]")
+        console.print("\n[dim]Running firmware... (Ctrl+C to stop)[/dim]\n")
+
+        try:
+            reason = engine.run(timeout_ms=timeout_ms)
+            console.print(f"\n[green]Execution finished:[/green] {reason}")
+            console.print(f"  Instructions: [cyan]{engine.execution_count}[/cyan]")
+            console.print(f"  Blocks:       [cyan]{engine.block_count}[/cyan]")
+
+            stats = engine.mmio_stats
+            console.print("\n[bold]MMIO Statistics:[/bold]")
+            for key, val in stats.items():
+                console.print(f"  {key}: [cyan]{val}[/cyan]")
+
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Stopped by user[/yellow]")
+        except Exception as e:
+            console.print(f"\n[red]Error:[/red] {e}")
 
     console.print("[green]Rehosting complete.[/green]")
 

@@ -6,7 +6,7 @@
   <img src="https://img.shields.io/badge/version-2.5.1-blue" alt="Version 2.5.1"/>
   <a href="#4-installation"><img src="https://img.shields.io/badge/python-3.10%2B-blue?logo=python&logoColor=white" alt="Python 3.10+"/></a>
   <img src="https://img.shields.io/badge/tests-1370%2B%20passing-brightgreen" alt="Tests"/>
-  <img src="https://img.shields.io/badge/license-GPL--3.0-orange" alt="License"/>
+  <img src="https://img.shields.io/badge/license-Apache--2.0-orange" alt="License"/>
   <img src="https://img.shields.io/badge/QEMU-9.0%2B-informational?logo=qemu" alt="QEMU"/>
   <img src="https://img.shields.io/badge/exploits-15%20modules-red" alt="Exploits"/>
 </p>
@@ -26,7 +26,7 @@ RTOSploit is a security testing framework purpose-built for embedded RTOS firmwa
 | **Binary Formats** | ELF, Intel HEX, Motorola S-Record, Raw binary |
 | **Exploit Modules** | 15 modules across FreeRTOS, ThreadX, and Zephyr |
 | **Tests** | 1370+ unit tests |
-| **License** | GPL-3.0-only |
+| **License** | Apache-2.0 |
 
 ### What works on what
 
@@ -282,25 +282,69 @@ Each module provides:
 - ROP gadget finder with bad-character filtering
 - XOR and null-free encoders
 
-### 3.4 Automatic Firmware Rehosting
+### 3.4 Emulation & Rehosting
 
-RTOSploit can boot firmware with **zero manual configuration**:
+RTOSploit provides two emulation engines for different use cases:
+
+#### QEMU Engine — Interactive Debugging & QEMU-Targeted Firmware
+
+Use QEMU when you want to see firmware output, attach a debugger, or work with firmware built for a QEMU-supported machine.
 
 ```bash
-rtosploit rehost -f firmware.elf
+# Interactive emulation with GDB
+rtosploit emulate -f firmware.elf -m mps2-an385 --gdb
+
+# Auto-rehost with HAL intercepts
+rtosploit rehost -f firmware.elf -m mps2-an385
 ```
 
-This single command:
-1. Detects RTOS type, version, architecture, and MCU family
-2. Resolves the correct QEMU machine (16 machine configs available)
-3. Downloads and parses the CMSIS-SVD file for register-level peripheral modeling
-4. Matches firmware symbols against 112 HAL function entries (STM32/nRF5/Zephyr)
-5. Creates SVD-backed peripheral models for accessed peripherals
-6. Sets up HAL function intercepts via GDB breakpoints
-7. Configures smart MMIO fallback for unmapped addresses
-8. Boots firmware in QEMU
+**When to use QEMU:**
+- Firmware targets a QEMU-supported machine (mps2-an385, lm3s6965evb, microbit, stm32f4)
+- You need UART output, serial console, or GDB step-through debugging
+- Interactive analysis where you want to observe firmware behavior
 
-**Vendor HAL Models:**
+**What QEMU provides:**
+- Full system emulation with NVIC, SysTick, machine-specific peripherals
+- GDB remote stub for breakpoints and register inspection
+- HAL function intercepts via breakpoints (112 functions across STM32/nRF5/Zephyr)
+- SVD-backed register models for peripheral accuracy
+
+#### Unicorn Engine — High-Speed Fuzzing & Real Hardware Firmware
+
+Use Unicorn when you need speed, or when firmware targets hardware that QEMU doesn't emulate (nRF52840, STM32F407, ESP32, etc.).
+
+```bash
+# Fuzz real hardware firmware (no QEMU machine needed)
+rtosploit fuzz -f real-product.elf --engine unicorn
+
+# Rehost with Unicorn for faster peripheral testing
+rtosploit rehost -f firmware.elf --engine unicorn
+```
+
+**When to use Unicorn:**
+- Real product firmware (nRF52840, STM32F407, etc.) that doesn't match a QEMU machine
+- Automated fuzzing campaigns where speed matters (200-1000 exec/sec vs 3.4 exec/sec with QEMU+GDB)
+- Firmware where all peripheral I/O should be fuzz-controlled
+
+**What Unicorn provides:**
+- CPU-only emulation (ARM Thumb2, no machine-specific peripherals)
+- Peripheral Input Playback (PIP) — MMIO reads return fuzz-controlled values with smart replay for status register polls. Based on Ember-IO (Farrelly et al., ASIA CCS 2023)
+- Interrupt-aware coverage (FERMCov) — separates ISR edges from program edges, reducing false unique paths by 75-88%
+- Round-robin interrupt scheduling with WFI/WFE detection
+- Snapshot/restore for fast fuzz iteration resets
+
+#### Engine Comparison
+
+| | QEMU | Unicorn |
+|---|---|---|
+| **Speed** | ~3-5 exec/sec | ~200-1000 exec/sec |
+| **Real hardware firmware** | Needs matching machine | Works on any ARM Cortex-M |
+| **Debugging** | GDB, breakpoints, UART | No interactive debugging |
+| **Peripheral modeling** | Machine-native + HAL hooks | PIP (fuzz-driven) + SVD |
+| **Coverage** | Basic block via bitmap | AFL-style edge + FERMCov |
+| **Best for** | Interactive analysis | Automated fuzzing |
+
+**Vendor HAL Models (used by both engines):**
 
 | Vendor | Peripherals Modeled | HAL Functions |
 |--------|-------------------|---------------|
@@ -308,17 +352,28 @@ This single command:
 | Nordic nRF5 SDK | UART, SPI, TWI, GPIO, BLE (SoftDevice), Timer, Clock, Power | 50 |
 | Zephyr RTOS | UART, SPI, I2C, GPIO, BLE, Device binding, Sleep | 20 |
 
-**Alternative Engine:** Unicorn-based emulation (optional) for MMIO-heavy workloads — 10-100x faster than QEMU+GDB for pure peripheral testing.
-
 ### 3.5 Grey-Box Fuzzing
 
-- QEMU-based firmware fuzzer with AFL-compatible coverage bitmaps
-- **Auto mode** (`--auto`): fingerprints firmware, discovers input points via HAL database, injects fuzz data through HAL receive functions — no manual `--inject-addr` needed
+Two fuzzing modes depending on the engine:
+
+**QEMU mode** (`--engine qemu`, default when machine is specified):
+- Snapshot-based execution with GDB-driven input injection
+- Coverage via QEMU bitmap (when available)
+- HAL hook-based input routing for discovered input functions
+- Best for firmware targeting QEMU-supported machines
+
+**Unicorn mode** (`--engine unicorn`, default when no QEMU machine matches):
+- PIP-driven fuzzing — all peripheral reads come from fuzz input with 2-bit replay optimization
+- AFL-style edge coverage via FERMCov (interrupt-aware)
+- Round-robin interrupt injection every N blocks + WFI/WFE handling
+- Crash detection: unmapped memory access, permission violations, infinite loops, timeouts
+- Best for real hardware firmware at high throughput
+
+**Common features (both engines):**
 - Crash deduplication (PC + CFSR + nearby-PC + backtrace frame matching)
 - Seed corpus management and coverage-guided mutation
 - Multi-worker parallel execution (`--jobs N`)
 - Live dashboard: executions/sec, crash count, coverage percentage
-- Optional native Rust fuzzer binary for maximum throughput
 - Interrupt injection via NVIC for ISR-triggered code paths
 
 ### 3.6 Post-Fuzzing Analysis
@@ -456,10 +511,16 @@ rtosploit scan \
 rtosploit analyze -f firmware.elf --all
 ```
 
-### Auto-Fuzz (Discovers Input Points)
+### Fuzz QEMU-Targeted Firmware
 
 ```bash
-rtosploit fuzz -f firmware.elf --auto --timeout 300
+rtosploit fuzz -f firmware.elf -m mps2-an385 --timeout 300
+```
+
+### Fuzz Real Hardware Firmware (Unicorn + PIP)
+
+```bash
+rtosploit fuzz -f real-product.elf --engine unicorn --timeout 300
 ```
 
 ### CVE Check
@@ -1356,6 +1417,50 @@ Detailed docs in the [`docs/`](docs/) directory:
 
 ---
 
+## Acknowledgements
+
+RTOSploit builds on techniques and ideas from the embedded security research community. We gratefully acknowledge the following projects and papers:
+
+### Research Papers
+
+| Paper | Authors | Venue | Technique Used |
+|-------|---------|-------|---------------|
+| **Ember-IO: Effective Firmware Fuzzing with Model-Free Memory Mapped IO** | Guy Farrelly, Michael Chesser, Damith C. Ranasinghe | ASIA CCS 2023 | Peripheral Input Playback (PIP) for model-free MMIO handling; FERMCov for interrupt-aware coverage collection |
+| **HALucinator: Firmware Re-hosting Through Abstraction Layer Emulation** | Abraham A. Clements et al. | NDSS 2020 | HAL function interception architecture; GDB breakpoint-based handler dispatch |
+| **P2IM: Scalable and Hardware-independent Firmware Testing via Automatic Peripheral Interface Modeling** | Bo Feng et al. | USENIX Security 2020 | Register type inference (CR/SR/DR) for automatic MMIO modeling |
+| **Fuzzware: Using Precise MMIO Modeling for Effective Firmware Fuzzing** | Tobias Scharnowski et al. | USENIX Security 2022 | MMIO model generation; firmware fuzzing benchmark suite |
+
+### Open Source Projects
+
+| Project | License | How We Use It |
+|---------|---------|--------------|
+| [QEMU](https://www.qemu.org/) | GPL-2.0 | System emulation engine for ARM Cortex-M, RISC-V |
+| [Unicorn Engine](https://www.unicorn-engine.org/) | GPL-2.0 | CPU emulation for high-speed fuzzing with memory hooks |
+| [Capstone](https://www.capstone-engine.org/) | BSD-3-Clause | Disassembly for ARM Thumb2, RISC-V, Xtensa |
+| [pyelftools](https://github.com/eliben/pyelftools) | Public Domain | ELF binary parsing, section/symbol extraction |
+| [AFL++](https://aflplus.plus/) | Apache-2.0 | Inspiration for coverage bitmap format and mutation strategies |
+| [CMSIS-SVD](https://github.com/cmsis-svd/cmsis-svd-data) | Apache-2.0 | Peripheral register definitions for STM32, nRF52, ESP32 |
+| [FreeRTOS](https://www.freertos.org/) | MIT | Test firmware for end-to-end validation |
+
+### Citation
+
+If you use RTOSploit in academic work, please cite it along with the underlying research:
+
+```
+RTOSploit: RTOS Exploitation & Bare-Metal Fuzzing Framework
+https://github.com/Indspl0it/RTOSploit
+```
+
+The Peripheral Input Playback technique is based on:
+```
+Guy Farrelly, Michael Chesser, and Damith C. Ranasinghe. 2023.
+Ember-IO: Effective Firmware Fuzzing with Model-Free Memory Mapped IO.
+In Proceedings of ASIA CCS'23. ACM.
+https://doi.org/10.1145/3579856.3582840
+```
+
+---
+
 ## License
 
-GPL-3.0-only. See [LICENSE](LICENSE) for details.
+Apache-2.0. See [LICENSE](LICENSE) for details.

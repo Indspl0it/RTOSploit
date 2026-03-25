@@ -7,7 +7,7 @@ name = "rtosploit"
 dynamic = ["version"]
 description = "RTOS Exploitation & Bare-Metal Fuzzing Framework"
 readme = "README.md"
-license = {text = "GPL-3.0-only"}
+license = {text = "Apache-2.0"}
 requires-python = ">=3.10"
 authors = [
     {name = "Santhosh Ballikonda"},

@@ -83,4 +83,4 @@ See [Architecture](docs/architecture.md) for the full package layout and compone
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under GPL-3.0-only.
+By contributing, you agree that your contributions will be licensed under Apache-2.0.

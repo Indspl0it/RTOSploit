@@ -29,11 +29,12 @@ console = Console()
 @click.option("--coverage-addr", type=str, default=None, help="Address of coverage bitmap in target memory (hex)")
 @click.option("--peripheral-config", type=click.Path(exists=True), default=None, help="YAML peripheral config for HAL intercepts")
 @click.option("--auto", "auto_mode", is_flag=True, default=False, help="Fully automatic fuzzing: fingerprint firmware and discover input points")
+@click.option("--engine", type=click.Choice(["qemu", "unicorn"]), default="qemu", show_default=True, help="Emulation engine backend")
 @click.pass_context
 def fuzz(ctx, firmware, machine, rtos, output, seeds, timeout, jobs,
          exec_timeout, persistent,
          inject_addr, inject_len_addr, corpus_dir, seed, coverage_addr,
-         peripheral_config, auto_mode):
+         peripheral_config, auto_mode, engine):
     """Start fuzzing a firmware image with QEMU-based grey-box fuzzing.
 
     \b
@@ -106,6 +107,50 @@ def fuzz(ctx, firmware, machine, rtos, output, seeds, timeout, jobs,
     os.makedirs(output, exist_ok=True)
     os.makedirs(f"{output}/crashes", exist_ok=True)
     os.makedirs(corpus_dir, exist_ok=True)
+
+    # Unicorn engine path
+    if engine == "unicorn":
+        from rtosploit.fuzzing.unicorn_worker import UnicornFuzzEngine
+
+        if not output_json:
+            console.print("  Engine:      [cyan]unicorn (PIP + FERMCov)[/cyan]")
+            console.print("\n[dim]Starting Unicorn fuzzer... (Ctrl+C to stop)[/dim]")
+
+        unicorn_engine = UnicornFuzzEngine(
+            firmware_path=firmware,
+            jobs=jobs,
+            output_dir=output,
+            timeout=timeout,
+        )
+
+        if output_json:
+            import json
+
+            final = unicorn_engine.run()
+            result = {
+                "firmware": firmware,
+                "engine": "unicorn",
+                "rtos": rtos,
+                "output": output,
+                "status": "completed",
+                "jobs": jobs,
+                "crashes": final.crashes,
+                "unique_crashes": final.unique_crashes,
+                "executions": final.executions,
+                "corpus_size": final.corpus_size,
+                "elapsed": round(final.elapsed, 1),
+                "exec_per_sec": round(final.exec_per_sec, 1),
+            }
+            click.echo(json.dumps(result, indent=2))
+        else:
+            engine_stats = {}
+
+            def on_unicorn_stats(stats):
+                engine_stats.update(stats)
+
+            unicorn_engine.run(on_stats=on_unicorn_stats)
+            console.print(f"\n[green]Unicorn fuzzer stopped.[/green] Output: [cyan]{output}[/cyan]")
+        return
 
     if output_json:
         import json

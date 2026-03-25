@@ -9,9 +9,12 @@ from __future__ import annotations
 import logging
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from rtosploit.peripherals.models.svd_peripheral import SVDPeripheralModel
+
+if TYPE_CHECKING:
+    from rtosploit.peripherals.pip_handler import PIPHandler
 
 logger = logging.getLogger(__name__)
 
@@ -212,16 +215,23 @@ class CompositeMMIOHandler:
         svd_models: Optional[dict[str, SVDPeripheralModel]] = None,
         fallback: Optional[MMIOFallbackModel] = None,
         system_regs: Optional[CortexMSystemRegisters] = None,
+        pip_handler: Optional[PIPHandler] = None,
     ) -> None:
         self._svd_models = svd_models or {}
         self._fallback = fallback or MMIOFallbackModel()
         self._system_regs = system_regs or CortexMSystemRegisters()
+        self._pip_handler = pip_handler
         self._svd_handled: int = 0
         self._fallback_handled: int = 0
         self._system_handled: int = 0
+        self._pip_handled: int = 0
 
     def read(self, address: int, size: int = 4) -> int:
-        """Route a read to the appropriate handler."""
+        """Route a read to the appropriate handler.
+
+        Raises:
+            InputExhausted: If PIP handler is active and fuzz input is consumed.
+        """
         # System registers first (PPB region)
         if self._system_regs.contains(address):
             self._system_handled += 1
@@ -234,6 +244,11 @@ class CompositeMMIOHandler:
                 self._svd_handled += 1
                 offset = address - periph.base_address
                 return model.read_register(offset, size)
+
+        # PIP handler (model-free fuzz-driven, between SVD and fallback)
+        if self._pip_handler is not None:
+            self._pip_handled += 1
+            return self._pip_handler.mmio_read(address, size)
 
         # Fallback (uses absolute address)
         self._fallback_handled += 1
@@ -254,6 +269,12 @@ class CompositeMMIOHandler:
                 model.write_register(offset, value, size)
                 return
 
+        # PIP handler (model-free fuzz-driven, between SVD and fallback)
+        if self._pip_handler is not None:
+            self._pip_handled += 1
+            self._pip_handler.mmio_write(address, value, size)
+            return
+
         self._fallback_handled += 1
         self._fallback.write_register(address, value, size)
 
@@ -267,12 +288,23 @@ class CompositeMMIOHandler:
         """Access the system register handler."""
         return self._system_regs
 
+    @property
+    def pip_handler(self) -> Optional[PIPHandler]:
+        """Access the PIP handler (None if not configured)."""
+        return self._pip_handler
+
     def get_coverage_stats(self) -> dict[str, int | float]:
         """Return handler routing statistics."""
-        total = self._svd_handled + self._fallback_handled + self._system_handled
+        total = (
+            self._svd_handled
+            + self._fallback_handled
+            + self._system_handled
+            + self._pip_handled
+        )
         return {
             "svd_handled": self._svd_handled,
             "system_handled": self._system_handled,
+            "pip_handled": self._pip_handled,
             "fallback_handled": self._fallback_handled,
             "total": total,
             "svd_coverage_pct": round(
