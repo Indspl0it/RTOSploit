@@ -18,8 +18,8 @@ class TestDocs:
         content = Path("README.md").read_text()
         assert "usage" in content.lower() or "quick" in content.lower()
 
-    def test_changelog_exists(self):
-        assert Path("CHANGELOG.md").exists()
+    def test_license_exists(self):
+        assert Path("LICENSE").exists()
 
     def test_contributing_exists(self):
         assert Path("CONTRIBUTING.md").exists()
