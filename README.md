@@ -5,7 +5,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/version-2.6.0-blue" alt="Version 2.5.1"/>
   <a href="#installation"><img src="https://img.shields.io/badge/python-3.10%2B-blue?logo=python&logoColor=white" alt="Python 3.10+"/></a>
-  <img src="https://img.shields.io/badge/tests-1528%20passing-brightgreen" alt="Tests"/>
+  <img src="https://img.shields.io/badge/tests-1664%20passing-brightgreen" alt="Tests"/>
   <img src="https://img.shields.io/badge/license-Apache--2.0-orange" alt="License"/>
   <img src="https://img.shields.io/badge/scanners-15%20modules-red" alt="Vulnerability Scanners"/>
 </p>
@@ -53,10 +53,11 @@ RTOSploit is a firmware security testing framework for embedded RTOS systems. It
 9. [Machine Configurations](#machine-configurations)
 10. [Configuration](#configuration)
 11. [CI/CD Integration](#cicd-integration)
-12. [Development](#development)
-13. [Troubleshooting](#troubleshooting)
-14. [Acknowledgements](#acknowledgements)
-15. [License](#license)
+12. [Documentation](#documentation)
+13. [Development](#development)
+14. [Troubleshooting](#troubleshooting)
+15. [Acknowledgements](#acknowledgements)
+16. [License](#license)
 
 ---
 
@@ -408,6 +409,7 @@ rtosploit fuzz -f real-product.elf --engine unicorn --timeout 300
 | `rehost` | Peripheral-aware rehosting (QEMU or Unicorn) |
 | `fuzz` | Coverage-guided fuzzing (QEMU or Unicorn) |
 | `triage` | Crash classification and input minimization |
+| `debug` | Replay crashes under GDB (`debug crash`) |
 | `coverage` | Coverage visualization (`stats`, `view`) |
 | `report` | SARIF and HTML report generation |
 | `scan` | Full CI/CD pipeline (analyze → CVE → fuzz → triage → report) |
@@ -511,6 +513,25 @@ jobs:
 ```
 
 See [docs/ci-integration.md](docs/ci-integration.md) for GitLab CI, Docker, and Makefile examples.
+
+---
+
+## Documentation
+
+Detailed guides are available in the [`docs/`](docs/) directory:
+
+| Guide | Description |
+|-------|-------------|
+| [Architecture](docs/architecture.md) | System design, module relationships, data flow |
+| [Installation](docs/installation.md) | Platform-specific setup (Linux, macOS, Windows/WSL) |
+| [Quick Start](docs/quickstart.md) | First scan in 5 minutes |
+| [Crash Triage](docs/crash-triage.md) | Crash JSON format, exploitability classification, debugging crashes |
+| [CVE Correlation](docs/cve-correlation.md) | How version matching works, NVD sync |
+| [Coverage](docs/coverage.md) | AFL edge bitmap, FERMCov, visualization |
+| [Reporting](docs/reporting.md) | SARIF and HTML report generation |
+| [CI/CD Integration](docs/ci-integration.md) | GitHub Actions, GitLab CI, Docker |
+| [Writing Scanners](docs/writing-scanners.md) | How to create new vulnerability scanner modules |
+| [Writing VulnRanges](docs/writing-vulnranges.md) | Contributing new CTF-style CVE challenges to `vulnrange/` |
 
 ---
 

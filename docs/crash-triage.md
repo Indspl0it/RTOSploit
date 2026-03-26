@@ -10,21 +10,25 @@ The fuzzer writes one JSON file per unique crash to the `crashes/` output direct
 
 ```json
 {
-  "crash_id": "crash_001",
-  "input": "base64-encoded-input-bytes",
-  "fault_type": "SEGFAULT",
-  "pc": "0x00001248",
-  "lr": "0x00000f9c",
-  "sp": "0x20001fc0",
-  "fault_address": "0x00000008",
-  "registers": {
-    "r0": "0x00000000",
-    "r1": "0x20001800",
-    "r2": "0x00000040",
-    "r3": "0x00000000"
-  },
-  "cfsr": "0x00000082",
-  "timestamp": "2024-01-15T10:23:45Z"
+  "crash_id": "crash-w0-000001",
+  "fault_type": "hard_fault",
+  "cfsr": 131072,
+  "registers": {"pc": 134218760, "sp": 536903680, "lr": 134217728, "r0": 0},
+  "fault_address": 134218760,
+  "backtrace": [134218760, 134217728],
+  "input_file": "crash-w0-000001.bin",
+  "input_size": 256,
+  "timestamp": 1709000000,
+  "stack_dump": "00100020...",
+  "stack_pointer": 536903680,
+  "fault_context": "fee7...",
+  "fault_context_base": 134218696,
+  "vtor": 134217728,
+  "lr": 134217728,
+  "xpsr": 16777216,
+  "firmware_path": "/path/to/firmware.elf",
+  "machine_name": "mps2-an385",
+  "inject_addr": 537001984
 }
 ```
 
@@ -131,6 +135,26 @@ rtosploit triage \
 # JSON for scripting
 rtosploit --json triage --crash-dir ./crashes --firmware firmware.bin
 ```
+
+---
+
+## Debugging Crashes
+
+After fuzzing finds crashes, replay them under GDB:
+
+    rtosploit debug crash crashes/crash-w0-000001.json
+
+If firmware/machine are recorded in the crash JSON, they are used automatically.
+Otherwise, specify them:
+
+    rtosploit debug crash crash.json --firmware fw.elf --machine mps2-an385
+
+The debug command:
+- Boots QEMU with GDB stub enabled
+- Injects the crash input into memory
+- Sets a breakpoint at the fault address
+- Displays crash context (registers, CFSR, stack, memory)
+- Waits for you to attach an external GDB client on port 1234
 
 ---
 
