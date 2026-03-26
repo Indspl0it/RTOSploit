@@ -29,10 +29,11 @@ ARCH_MAP: dict[str, tuple[int, int]] = {
     "riscv32": (capstone.CS_ARCH_RISCV, capstone.CS_MODE_RISCV32),
     "riscv64": (capstone.CS_ARCH_RISCV, capstone.CS_MODE_RISCV64),
     "mips":    (capstone.CS_ARCH_MIPS, capstone.CS_MODE_MIPS32),
-    "xtensa":  (capstone.CS_ARCH_XTENSA, capstone.CS_MODE_LITTLE_ENDIAN),
 }
 
-# AArch64 support depends on capstone version
+# Xtensa and AArch64 depend on capstone version/build
+if hasattr(capstone, "CS_ARCH_XTENSA"):
+    ARCH_MAP["xtensa"] = (capstone.CS_ARCH_XTENSA, capstone.CS_MODE_LITTLE_ENDIAN)
 if hasattr(capstone, "CS_ARCH_ARM64"):
     ARCH_MAP["aarch64"] = (capstone.CS_ARCH_ARM64, capstone.CS_MODE_ARM)
 
