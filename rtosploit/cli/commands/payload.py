@@ -42,7 +42,12 @@ def shellcode_cmd(ctx, arch, shellcode_type, encoder, bad_chars, output_format, 
     # Map CLI arch names to the strings the generator accepts
     internal_arch = _ARCH_MAP.get(arch, arch)
 
-    target_addr = int(address, 16) if address else 0x20000000
+    try:
+        target_addr = int(address, 16) if address else 0x20000000
+    except ValueError:
+        err_console.print(f"[red]Invalid hex address: {address!r}[/red]")
+        ctx.exit(1)
+        return
 
     if shellcode_type == "nop_sled":
         raw_bytes = gen.nop_sled(internal_arch, length)
@@ -66,7 +71,12 @@ def shellcode_cmd(ctx, arch, shellcode_type, encoder, bad_chars, output_format, 
     # Filter bad characters
     if bad_chars:
         from rtosploit.payloads.shellcode import filter_bad_chars
-        bad = bytes.fromhex(bad_chars)
+        try:
+            bad = bytes.fromhex(bad_chars)
+        except ValueError:
+            err_console.print(f"[red]Invalid hex bad-chars: {bad_chars!r}[/red]")
+            ctx.exit(1)
+            return
         raw_bytes = filter_bad_chars(raw_bytes, bad)
         encoder = f"{encoder}+xor_badchar"
 
@@ -133,8 +143,18 @@ def rop_cmd(ctx, binary, arch, goal, bad_chars, load_addr, output_format):
         firmware_bytes = f.read()
 
     helper = ROPHelper()
-    load_address = int(load_addr, 16)
-    bad = bytes.fromhex(bad_chars) if bad_chars else b""
+    try:
+        load_address = int(load_addr, 16)
+    except ValueError:
+        err_console.print(f"[red]Invalid hex load address: {load_addr!r}[/red]")
+        ctx.exit(1)
+        return
+    try:
+        bad = bytes.fromhex(bad_chars) if bad_chars else b""
+    except ValueError:
+        err_console.print(f"[red]Invalid hex bad-chars: {bad_chars!r}[/red]")
+        ctx.exit(1)
+        return
 
     gadgets = helper.find_bxlr_gadgets(firmware_bytes, load_address)
     gadgets = helper.filter_bad_chars(gadgets, bad)

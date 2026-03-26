@@ -499,7 +499,7 @@ def fingerprint_firmware(firmware: FirmwareImage) -> RTOSFingerprint:
     if firmware.architecture in ("armv7m", "armv8m"):
         try:
             vector_table = firmware.get_vector_table()
-        except (ValueError, Exception):
+        except ValueError:
             pass
 
     memory_map = _extract_memory_map(firmware)

@@ -307,7 +307,8 @@ def finding_from_exploit_result(result_dict: dict) -> Finding:
     if notes:
         description_parts.append(f"Notes: {'; '.join(notes)}")
 
-    # Use "scanner" category if available, fall back to "exploit" for compat
+    # Use "scanner" category if available; default for results without an
+    # explicit category field (e.g. ScanResult.to_dict()).
     category = result_dict.get("category", "scanner")
 
     return Finding(

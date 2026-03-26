@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Optional
 
@@ -12,6 +13,8 @@ from rtosploit.analysis.detection.evidence import (
 )
 from rtosploit.peripherals.svd_model import SVDDevice
 from rtosploit.utils.binary import FirmwareImage
+
+logger = logging.getLogger(__name__)
 
 
 # Layer registry: name -> (import_path, function_name, needs_extra_args)
@@ -76,8 +79,8 @@ def detect_peripherals(
 
             all_evidence.extend(layer_evidence)
             layers_run.append(layer_name)
-        except Exception:
-            # Layer failed — skip silently, other layers continue
+        except Exception as e:
+            logger.warning("Detection layer '%s' failed: %s", layer_name, e)
             layers_run.append(f"{layer_name}:error")
 
     # Aggregate evidence into peripheral detections

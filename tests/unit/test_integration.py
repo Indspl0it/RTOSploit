@@ -205,34 +205,55 @@ class TestAnalysisIntegration:
         assert any("FreeRTOS" in (s[1] if isinstance(s, tuple) else str(s)) for s in strings)
 
     def test_rtos_fingerprint_freertos(self, sample_firmware):
+        from rtosploit.utils.binary import FirmwareImage, BinaryFormat
         with open(sample_firmware, 'rb') as f:
             data = f.read()
-        try:
-            from rtosploit.analysis.fingerprint import RTOSFingerprint
-            fp = RTOSFingerprint()
-            _result = fp.detect(data)
-            # May detect or return None — just shouldn't crash
-        except Exception as e:
-            pytest.skip(f"Fingerprint not available: {e}")
+        fw = FirmwareImage(
+            data=data,
+            architecture="armv7m",
+            base_address=0x08000000,
+            entry_point=0x08000001,
+            format=BinaryFormat.RAW,
+        )
+        from rtosploit.analysis.fingerprint import fingerprint_firmware
+        result = fingerprint_firmware(fw)
+        assert result.rtos_type in ("freertos", "unknown")
+        assert 0.0 <= result.confidence <= 1.0
 
     def test_heap_detect_no_crash(self, sample_firmware):
+        from rtosploit.utils.binary import FirmwareImage, BinaryFormat
+        from rtosploit.analysis.fingerprint import RTOSFingerprint
         with open(sample_firmware, 'rb') as f:
             data = f.read()
-        try:
-            from rtosploit.analysis.heap_detect import detect_heap_variant
-            _result = detect_heap_variant(data)
-            # May be None if not detected
-        except Exception as e:
-            pytest.skip(f"Heap detect not available: {e}")
+        fw = FirmwareImage(
+            data=data,
+            architecture="armv7m",
+            base_address=0x08000000,
+            entry_point=0x08000001,
+            format=BinaryFormat.RAW,
+        )
+        fp = RTOSFingerprint(
+            rtos_type="freertos", version="10.4.1", confidence=0.5,
+        )
+        from rtosploit.analysis.heap_detect import detect_heap
+        result = detect_heap(fw, fp)
+        # May return minimal HeapInfo if not detected — just shouldn't crash
+        assert result is not None
 
     def test_mpu_check_no_crash(self, sample_firmware):
+        from rtosploit.utils.binary import FirmwareImage, BinaryFormat
         with open(sample_firmware, 'rb') as f:
             data = f.read()
-        try:
-            from rtosploit.analysis.mpu_check import check_mpu_config
-            _result = check_mpu_config(data)
-        except Exception as e:
-            pytest.skip(f"MPU check not available: {e}")
+        fw = FirmwareImage(
+            data=data,
+            architecture="armv7m",
+            base_address=0x08000000,
+            entry_point=0x08000001,
+            format=BinaryFormat.RAW,
+        )
+        from rtosploit.analysis.mpu_check import check_mpu
+        result = check_mpu(fw)
+        assert result is not None
 
 
 # --- CLI + Module Integration ---

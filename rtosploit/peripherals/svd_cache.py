@@ -10,6 +10,7 @@ import logging
 import os
 import urllib.error
 import urllib.request
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Optional
 
@@ -117,11 +118,11 @@ class SVDCache:
         if path is None:
             return None
 
-        from rtosploit.peripherals.svd_parser import parse_svd
+        from rtosploit.peripherals.svd_parser import SVDParseError, parse_svd
 
         try:
             return parse_svd(path)
-        except Exception as e:
+        except (SVDParseError, ValueError, KeyError, AttributeError, ET.ParseError) as e:
             logger.error("Failed to parse SVD %s: %s", path, e)
             return None
 

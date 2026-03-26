@@ -1,8 +1,11 @@
 """Console state management."""
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Optional, Any
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -48,6 +51,6 @@ class ConsoleState:
         for pid, instance in list(self.active_qemu.items()):
             try:
                 instance.stop()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Failed to stop QEMU instance %d: %s", pid, e)
         self.active_qemu.clear()

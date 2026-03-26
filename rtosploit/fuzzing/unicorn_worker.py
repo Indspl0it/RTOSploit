@@ -295,7 +295,8 @@ class UnicornFuzzEngine:
         # Discover IRQs from vector table
         try:
             irq_list = discover_irqs(firmware)
-        except Exception:
+        except Exception as e:
+            logger.warning("IRQ discovery failed, continuing without interrupts: %s", e)
             irq_list = []
 
         logger.info(

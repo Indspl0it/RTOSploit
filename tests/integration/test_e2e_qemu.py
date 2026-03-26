@@ -329,7 +329,7 @@ class TestExploitToReport:
         from rtosploit.reporting.models import finding_from_exploit_result, EngagementReport
         result_dict = result.to_dict()
         finding = finding_from_exploit_result(result_dict)
-        assert finding.category == "exploit"
+        assert finding.category == "scanner"
         assert finding.cve == "CVE-2021-43997"
         assert finding.exploit_module == "freertos/mpu_bypass"
 
@@ -774,7 +774,7 @@ class TestCLIWithRealFirmware:
         fw = firmware_path("CVE-2021-43997")
         from rtosploit.cli.main import cli
         result = runner.invoke(cli, [
-            "exploit", "check", "freertos/mpu_bypass",
+            "scan-vuln", "check", "freertos/mpu_bypass",
             "--firmware", fw,
             "--machine", "mps2-an385",
         ])

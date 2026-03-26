@@ -27,6 +27,31 @@ SKIP_REASON = "qemu-system-arm not found on PATH"
 VULNRANGE_DIR = Path("vulnrange")
 
 
+def _cleanup_fuzz_engine(engine) -> None:
+    """Stop all fuzz workers and kill any leftover QEMU processes.
+
+    FuzzWorker stores QEMU as a local variable inside run(), so we
+    cannot reach it directly.  Instead, signal all workers to stop
+    and then kill any qemu-system-arm children that are still alive.
+    """
+    import os
+    import time
+    for w in getattr(engine, "_workers", []):
+        w.stop()
+    # Give daemon threads time to hit their finally: qemu.stop() block
+    time.sleep(2)
+    # Belt-and-suspenders: kill leftover qemu-system-arm processes that
+    # we spawned (child processes of this Python process).
+    try:
+        import subprocess
+        subprocess.run(
+            ["pkill", "-P", str(os.getpid()), "-f", "qemu-system"],
+            capture_output=True, timeout=5,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+
 # ---------------------------------------------------------------------------
 # 1. TestQEMUBoot
 # ---------------------------------------------------------------------------
@@ -271,59 +296,52 @@ class TestFuzzerSmoke:
 
     def test_fuzzer_engine_creates_corpus(self, firmware_path: str, tmp_path: Path) -> None:
         """Verify the fuzzer creates a corpus directory and output files."""
-        # The fuzzer module may not exist yet; skip gracefully.
-        try:
-            from rtosploit.fuzzer.engine import FuzzerEngine
-        except ImportError:
-            pytest.skip("rtosploit.fuzzer.engine not available")
+        from rtosploit.fuzzing.engine import FuzzEngine
 
         corpus_dir = tmp_path / "corpus"
         corpus_dir.mkdir()
-        output_dir = tmp_path / "output"
-        output_dir.mkdir()
+        crash_dir = tmp_path / "crashes"
+        crash_dir.mkdir()
 
         config = RTOSploitConfig()
+        engine = FuzzEngine(
+            firmware_path=firmware_path,
+            machine_name="mps2-an385",
+            config=config,
+        )
         try:
-            engine = FuzzerEngine(
-                firmware=firmware_path,
-                machine="mps2-an385",
-                corpus_dir=str(corpus_dir),
-                output_dir=str(output_dir),
-                config=config,
-            )
             # Run for a very short duration to verify startup
-            engine.run(max_iterations=1, timeout=5)
+            engine.run(timeout=5, corpus_dir=str(corpus_dir), crash_dir=str(crash_dir))
         except (QEMUCrashError, OperationError, NotImplementedError):
             pytest.skip("Fuzzer engine not fully functional yet")
+        finally:
+            _cleanup_fuzz_engine(engine)
 
         # Corpus or output directory should still exist
         assert corpus_dir.exists()
 
-    def test_fuzzer_handles_timeout(self, firmware_path: str, tmp_path: Path) -> None:
-        """Verify the fuzzer handles a zero-iteration timeout gracefully."""
-        try:
-            from rtosploit.fuzzer.engine import FuzzerEngine
-        except ImportError:
-            pytest.skip("rtosploit.fuzzer.engine not available")
+    def test_fuzzer_handles_short_timeout(self, firmware_path: str, tmp_path: Path) -> None:
+        """Verify the fuzzer handles a short timeout gracefully."""
+        from rtosploit.fuzzing.engine import FuzzEngine
 
         corpus_dir = tmp_path / "corpus"
         corpus_dir.mkdir()
-        output_dir = tmp_path / "output"
-        output_dir.mkdir()
+        crash_dir = tmp_path / "crashes"
+        crash_dir.mkdir()
 
         config = RTOSploitConfig()
+        engine = FuzzEngine(
+            firmware_path=firmware_path,
+            machine_name="mps2-an385",
+            config=config,
+        )
         try:
-            engine = FuzzerEngine(
-                firmware=firmware_path,
-                machine="mps2-an385",
-                corpus_dir=str(corpus_dir),
-                output_dir=str(output_dir),
-                config=config,
-            )
-            # Timeout of 0 should return immediately without error
-            engine.run(max_iterations=0, timeout=0)
+            # timeout=0 means unlimited in FuzzEngine API; use 1s for a quick exit
+            engine.run(timeout=1, corpus_dir=str(corpus_dir), crash_dir=str(crash_dir))
         except (QEMUCrashError, OperationError, NotImplementedError):
             pytest.skip("Fuzzer engine not fully functional yet")
+        finally:
+            _cleanup_fuzz_engine(engine)
 
 
 # ---------------------------------------------------------------------------
