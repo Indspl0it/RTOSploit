@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import capstone  # noqa: E402 — patch before any rtosploit import
 if not hasattr(capstone, "CS_ARCH_XTENSA"):
