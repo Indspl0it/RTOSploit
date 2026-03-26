@@ -264,6 +264,12 @@ class QEMUInstance:
                 # GDB connection is optional — continue without it
                 self.gdb = None
 
+            # Auto-load symbols into GDB client for name-based breakpoints
+            if self.gdb is not None:
+                fw = load_firmware(Path(firmware_path))
+                if fw.symbols:
+                    self.gdb.set_symbol_table(fw.symbols)
+
     def stop(self) -> None:
         """Stop the QEMU process.
 

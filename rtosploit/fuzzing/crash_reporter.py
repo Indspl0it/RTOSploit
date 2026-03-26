@@ -49,6 +49,16 @@ class CrashReporter:
             "input_file": input_filename,
             "input_size": len(input_data),
             "timestamp": crash_data.get("timestamp", int(time.time())),
+            "stack_dump": crash_data.get("stack_dump", ""),
+            "stack_pointer": crash_data.get("stack_pointer", 0),
+            "fault_context": crash_data.get("fault_context", ""),
+            "fault_context_base": crash_data.get("fault_context_base", 0),
+            "vtor": crash_data.get("vtor", 0),
+            "lr": crash_data.get("lr", 0),
+            "xpsr": crash_data.get("xpsr", 0),
+            "firmware_path": crash_data.get("firmware_path", ""),
+            "machine_name": crash_data.get("machine_name", ""),
+            "inject_addr": crash_data.get("inject_addr", 0),
         }
 
         json_path = self._output_dir / f"{crash_id}.json"

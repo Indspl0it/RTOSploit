@@ -3,6 +3,7 @@ import click
 from rich.console import Console
 
 console = Console()
+err_console = Console(stderr=True)
 
 
 @click.command("emulate")
@@ -12,8 +13,9 @@ console = Console()
 @click.option("--gdb-port", type=int, default=1234, show_default=True, help="GDB server port")
 @click.option("--serial-port", type=int, default=None, help="Forward UART to TCP port")
 @click.option("--svd", type=click.Path(exists=True), default=None, help="SVD file for peripheral definitions")
+@click.option("--break", "-b", "breakpoints", multiple=True, help="Set breakpoint at symbol name or hex address (requires --gdb)")
 @click.pass_context
-def emulate(ctx, firmware, machine, gdb, gdb_port, serial_port, svd):
+def emulate(ctx, firmware, machine, gdb, gdb_port, serial_port, svd, breakpoints):
     """Launch QEMU emulation of a firmware image.
 
     \b
@@ -65,6 +67,34 @@ def emulate(ctx, firmware, machine, gdb, gdb_port, serial_port, svd):
         )
         pid = instance._process.pid if instance._process else "?"
         console.print(f"[green]QEMU running[/green] (PID: {pid})")
+
+        if breakpoints and instance.gdb is not None:
+            has_symbols = bool(instance.gdb._symbols)
+            for bp in breakpoints:
+                if bp.startswith("0x"):
+                    try:
+                        addr = int(bp, 16)
+                        instance.gdb.set_breakpoint(addr & ~1)
+                        err_console.print(f"[green]Breakpoint at 0x{addr & ~1:08x}[/green]")
+                    except Exception as e:
+                        err_console.print(f"[red]Failed to set breakpoint at {bp}: {e}[/red]")
+                else:
+                    if not has_symbols:
+                        err_console.print(
+                            f"[red]Cannot set breakpoint '{bp}': firmware has no symbols. "
+                            f"Use an ELF file or hex address (--break 0x08001234).[/red]"
+                        )
+                        continue
+                    try:
+                        addr = instance.gdb.set_breakpoint_by_name(bp)
+                        err_console.print(f"[green]Breakpoint at {bp} (0x{addr:08x})[/green]")
+                    except Exception as e:
+                        err_console.print(f"[yellow]Warning: {e}[/yellow]")
+        elif breakpoints and instance.gdb is None:
+            err_console.print(
+                "[yellow]Warning: --break requires --gdb flag. "
+                "Re-run with --gdb to enable breakpoints.[/yellow]"
+            )
 
         try:
             # Wait for QEMU process to exit

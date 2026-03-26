@@ -79,6 +79,7 @@ from rtosploit.cli.commands.coverage import coverage  # noqa: E402
 from rtosploit.cli.commands.cve import cve  # noqa: E402
 from rtosploit.cli.commands.scan import scan  # noqa: E402
 from rtosploit.cli.commands.rehost import rehost  # noqa: E402
+from rtosploit.cli.commands.debug_crash import debug  # noqa: E402
 
 cli.add_command(emulate)
 cli.add_command(fuzz)
@@ -94,6 +95,7 @@ cli.add_command(coverage)
 cli.add_command(cve)
 cli.add_command(scan)
 cli.add_command(rehost)
+cli.add_command(debug)
 
 
 def _should_launch_interactive() -> bool:

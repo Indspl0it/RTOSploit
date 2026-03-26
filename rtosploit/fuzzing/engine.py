@@ -20,6 +20,16 @@ from rtosploit.fuzzing.input_injector import InputInjector
 
 logger = logging.getLogger(__name__)
 
+
+def _unwind_crash_backtrace(gdb, registers: dict) -> list[int]:
+    """Attempt stack unwinding at crash point. Returns list of return addresses."""
+    try:
+        from rtosploit.emulation.backtrace import unwind_stack
+        frames = unwind_stack(gdb, registers, max_frames=16)
+        return [f.address for f in frames]
+    except Exception:
+        return []
+
 CFSR_ADDR = 0xE000ED24
 
 
@@ -237,19 +247,64 @@ class FuzzWorker:
                 if is_crash:
                     # Read crash data
                     registers = gdb.read_registers()
+
+                    # Read CFSR
                     try:
                         cfsr_bytes = gdb.read_memory(CFSR_ADDR, 4)
                         cfsr = int.from_bytes(cfsr_bytes, "little")
                     except Exception:
                         cfsr = 0
 
+                    # Read stack contents (256 bytes from SP)
+                    stack_dump = b""
+                    sp = registers.get("sp", 0)
+                    if 0x20000000 <= sp <= 0x2007FFFF:
+                        try:
+                            stack_dump = gdb.read_memory(
+                                sp, min(256, 0x20080000 - sp)
+                            )
+                        except Exception:
+                            pass
+
+                    # Read memory around fault address (64 bytes before and after)
+                    fault_addr = registers.get("pc", 0)
+                    fault_context = b""
+                    if fault_addr > 64:
+                        try:
+                            fault_context = gdb.read_memory(
+                                fault_addr - 64, 128
+                            )
+                        except Exception:
+                            pass
+
+                    # Read VTOR to identify vector table
+                    vtor = 0
+                    try:
+                        vtor_bytes = gdb.read_memory(0xE000ED08, 4)
+                        vtor = int.from_bytes(vtor_bytes, "little")
+                    except Exception:
+                        pass
+
                     crash_data = {
                         "fault_type": "hard_fault",
                         "cfsr": cfsr,
                         "registers": registers,
-                        "fault_address": registers.get("pc", 0),
-                        "backtrace": [],
+                        "fault_address": fault_addr,
+                        "backtrace": _unwind_crash_backtrace(gdb, registers),
                         "timestamp": int(time.time()),
+                        # Rich context fields
+                        "stack_dump": stack_dump.hex() if stack_dump else "",
+                        "stack_pointer": sp,
+                        "fault_context": (
+                            fault_context.hex() if fault_context else ""
+                        ),
+                        "fault_context_base": max(0, fault_addr - 64),
+                        "vtor": vtor,
+                        "lr": registers.get("lr", 0),
+                        "xpsr": registers.get("xpsr", 0),
+                        "firmware_path": self.firmware_path,
+                        "machine_name": self.machine_name,
+                        "inject_addr": self.inject_addr,
                     }
 
                     if CrashReporter.deduplicate(crash_data, self._crash_data_list):

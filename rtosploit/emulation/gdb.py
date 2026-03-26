@@ -31,6 +31,8 @@ class GDBClient:
     def __init__(self) -> None:
         self._sock: Optional[socket.socket] = None
         self._connected = False
+        self._symbols: dict[str, int] = {}
+        self._breakpoints: dict[str, int] = {}
 
     def connect(self, host: str, port: int, timeout: float = 5.0) -> None:
         """Connect to QEMU's GDB RSP stub over TCP.
@@ -315,6 +317,68 @@ class GDBClient:
         if name not in regs:
             raise OperationError(f"Register '{name}' not found in register set")
         return regs[name]
+
+    def set_symbol_table(self, symbols: dict[str, int]) -> None:
+        """Store symbol table for name-based breakpoint resolution."""
+        self._symbols = dict(symbols)
+
+    def set_breakpoint_by_name(self, name: str) -> int:
+        """Set breakpoint at a named symbol. Returns the address.
+
+        Resolution order:
+            1. Exact match
+            2. Case-insensitive match
+            3. Substring match (e.g. "malloc" matches "pvPortMalloc")
+
+        Args:
+            name: Symbol name to resolve.
+
+        Returns:
+            The resolved address (with Thumb bit cleared).
+
+        Raises:
+            OperationError: If symbol not found.
+        """
+        address: int | None = None
+
+        # 1. Exact match
+        if name in self._symbols:
+            address = self._symbols[name]
+        else:
+            # 2. Case-insensitive match
+            name_lower = name.lower()
+            for sym, addr in self._symbols.items():
+                if sym.lower() == name_lower:
+                    address = addr
+                    break
+
+            # 3. Substring match
+            if address is None:
+                matches = [
+                    (sym, addr)
+                    for sym, addr in self._symbols.items()
+                    if name_lower in sym.lower()
+                ]
+                if len(matches) == 1:
+                    address = matches[0][1]
+                elif len(matches) > 1:
+                    sym_names = ", ".join(m[0] for m in matches[:5])
+                    raise OperationError(
+                        f"Ambiguous symbol '{name}': matches {sym_names}"
+                    )
+
+        if address is None:
+            raise OperationError(f"Symbol '{name}' not found in symbol table")
+
+        # Clear Thumb bit
+        address = address & ~1
+        self.set_breakpoint(address)
+        self._breakpoints[name] = address
+        return address
+
+    def list_breakpoints(self) -> dict[str, int]:
+        """Return dict of name -> address for active breakpoints."""
+        return dict(self._breakpoints)
 
     def detach(self) -> None:
         """Detach from the target via 'D' and close the socket."""
