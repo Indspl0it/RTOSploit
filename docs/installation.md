@@ -95,31 +95,15 @@ If you see a version below 9.0, RTOSploit will print an error and refuse to star
 
 ---
 
-## Native Rust Fuzzer (Optional)
+## Optional: Unicorn Engine
 
-Without the native fuzzer, RTOSploit runs in **simulation mode** — the dashboard and full pipeline work, but coverage is not driven by real mutation. Simulation mode is useful for:
-- Testing the pipeline and report generation
-- Demonstrating the interactive dashboard
-- CI dry-runs without fuzzing infrastructure
-
-To build the real fuzzer:
-
-### Prerequisites
+For high-speed fuzzing of real hardware firmware (no QEMU machine required):
 
 ```bash
-# Install Rust toolchain
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source ~/.cargo/env
+pip install unicorn
 ```
 
-### Build
-
-```bash
-cd rtosploit            # project root (contains Cargo.toml)
-cargo build --release -p rtosploit-fuzzer
-```
-
-The built binary is automatically detected when it is in `PATH` or in the Cargo output directory. RTOSploit checks for `rtosploit-fuzzer` at fuzz startup and falls back to simulation if not found.
+This enables the `--engine unicorn` option on `fuzz` and `rehost` commands, providing ~700 exec/sec with Peripheral Input Playback (PIP).
 
 ---
 

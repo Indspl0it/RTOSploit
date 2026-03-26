@@ -16,7 +16,7 @@ keywords = ["security", "fuzzing", "embedded", "rtos"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Information Technology",
-    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -39,10 +39,9 @@ dependencies = [
 dev = [
     "pytest>=7.0",
     "pytest-cov",
+    "pytest-timeout",
     "mypy",
     "ruff",
-    "black",
-    "maturin>=1.0",
 ]
 
 [project.scripts]
@@ -55,16 +54,6 @@ Repository = "https://github.com/Indspl0it/RTOSploit"
 [tool.hatch.version]
 path = "VERSION"
 pattern = "(?P<version>.+)"
-
-# Maturin configuration for building optional Rust/PyO3 extensions.
-# The default build backend remains Hatchling (pure-Python). Use Maturin
-# when you need to compile the Rust native module (rtosploit._native):
-#   maturin develop --release
-[tool.maturin]
-features = ["pyo3/extension-module"]
-python-source = "."
-module-name = "rtosploit._native"
-manifest-path = "Cargo.toml"
 
 [tool.ruff]
 line-length = 100

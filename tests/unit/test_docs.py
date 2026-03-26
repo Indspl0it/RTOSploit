@@ -64,15 +64,6 @@ class TestPackaging:
     def test_package_exports_key_modules(self):
         pass
 
-    def test_cargo_toml_exists(self):
-        assert Path("Cargo.toml").exists()
-
-    def test_cargo_workspace_members(self):
-        content = Path("Cargo.toml").read_text()
-        assert "rtosploit-fuzzer" in content
-        assert "rtosploit-svd" in content
-        assert "rtosploit-payloads" in content
-
     def test_license_file_exists(self):
         assert Path("LICENSE").exists()
 

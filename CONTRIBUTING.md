@@ -29,14 +29,11 @@ pytest tests/unit/test_cve.py -v          # CVE correlation
 pytest tests/unit/test_coverage_viz.py -v # Coverage viz
 pytest tests/unit/test_ci_pipeline.py -v  # CI pipeline
 
-# Rust tests
-cargo test --workspace
 ```
 
 ## Code Style
 
-- Python: follow PEP 8, use type hints, `from __future__ import annotations`
-- Rust: use `cargo fmt` and `cargo clippy`
+- Follow PEP 8, use type hints, `from __future__ import annotations`
 - Keep imports sorted (stdlib, third-party, local)
 
 ## Adding Vulnerability Scanner Modules

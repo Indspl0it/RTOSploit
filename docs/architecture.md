@@ -1,6 +1,6 @@
 # Architecture
 
-RTOSploit is organized as a layered Python package with an optional native Rust component for performance-critical fuzzing. The system is designed around three entry points — interactive mode, CLI subcommands, and a programmatic Python API — all sharing the same core analysis and emulation engine.
+RTOSploit is a Python package with two emulation engines (QEMU for interactive debugging, Unicorn for high-speed fuzzing). The system is designed around three entry points — interactive mode, CLI subcommands, and a programmatic Python API — all sharing the same core analysis and emulation engine.
 
 ---
 
@@ -182,7 +182,7 @@ sequenceDiagram
     ci->>qemu: QEMUInstance.start(firmware, machine)
     qemu-->>ci: QEMU process running
 
-    ci->>fuzzer: launch rtosploit-fuzzer (or simulation)
+    ci->>fuzzer: launch FuzzEngine (QEMU or Unicorn)
     fuzzer-->>ci: crash JSON files + coverage bitmap
 
     ci->>qemu: QEMUInstance.stop()
@@ -298,7 +298,7 @@ flowchart TB
     subgraph Fuzzer["Fuzzing Layer"]
         harness["QEMU Harness\nqemu-system-arm -M mps2-an385"]
         bitmap["AFL Coverage Bitmap\n64KB shared memory"]
-        mutation["Mutation Engine\nrtosploit-fuzzer (Rust)\nor simulation mode"]
+        mutation["Mutation Engine\nUnicorn PIP or QEMU snapshot"]
         corpus["Corpus Manager\nseeds → interesting inputs"]
         crashes["Crash Collector\nJSON: registers, PC, fault addr"]
     end
